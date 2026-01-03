@@ -1,319 +1,339 @@
 import { create } from 'zustand';
-import { BoardObject, BoardOp, ToolType, User, Viewport, UserRole, Point, AuditLogEntry, WebhookConfig } from './types';
 import { nanoid } from 'nanoid';
-import { socketService } from './services/socket';
+import { CanvasItem, ToolType, Viewport, UserState, Op } from './types';
+import { BroadcastTransport, TransportLayer } from './transport';
 
-interface AppState {
-  // User/Auth
-  currentUser: User | null;
-  setCurrentUser: (user: User) => void;
-  
-  // Board State
-  boardId: string | null;
-  objects: Record<string, BoardObject>; // Normalized state
-  objectOrder: string[]; // Z-index handling
-  
-  // UI State
-  viewport: Viewport;
-  activeTool: ToolType;
-  selectedIds: string[];
-  isSpacePressed: boolean;
-  
-  // Tool Properties
-  strokeColor: string;
-  strokeWidth: number;
-  fillColor: string;
-  
-  // Realtime
-  peers: User[];
-  
-  // Phase 2: History & Export
-  isExporting: boolean;
+const transport: TransportLayer = new BroadcastTransport();
 
-  // Phase 3: Enterprise & Offline
-  isAdminOpen: boolean;
-  isShareOpen: boolean; // New state for Share Modal
-  isMenuOpen: boolean;  // New state for Main Menu
-  auditLogs: AuditLogEntry[];
-  webhooks: WebhookConfig[];
-  offlineMode: boolean; // Simulates disconnected/offline state
-  
-  // Actions
-  initBoard: (id: string) => void;
-  setViewport: (vp: Partial<Viewport>) => void;
-  setTool: (tool: ToolType) => void;
-  selectObjects: (ids: string[], append?: boolean) => void;
-  updateObject: (id: string, updates: Partial<BoardObject>) => void;
-  createObject: (obj: BoardObject) => void;
-  deleteObjects: (ids: string[]) => void;
-  triggerExport: () => Promise<void>;
-  
-  // Phase 3 Actions
-  toggleAdmin: () => void;
-  setShareOpen: (open: boolean) => void; // New action
-  setMenuOpen: (open: boolean) => void;   // New action
-  addWebhook: (url: string) => void;
-  toggleLock: (id: string) => void;
-  setOfflineMode: (offline: boolean) => void;
-  
-  // Interaction Handlers
-  onPointerMove: (pt: Point) => void;
-  
-  // Socket Integration
-  applyRemoteOp: (op: BoardOp) => void;
-  updatePeer: (user: User) => void;
-  removePeer: (userId: string) => void;
+// --- Constants ---
+const COLORS = ['#ef4444', '#f97316', '#f59e0b', '#10b981', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899'];
+const getRandomColor = () => COLORS[Math.floor(Math.random() * COLORS.length)];
+
+interface BoardMetadata {
+  id: string;
+  name: string;
+  updatedAt: number;
 }
 
-export const useStore = create<AppState>((set, get) => ({
-  currentUser: null,
-  setCurrentUser: (user) => set({ currentUser: user }),
+interface AppState {
+  // Navigation
+  view: 'login' | 'dashboard' | 'board';
+  currentUser: UserState | null;
+  currentBoardId: string | null;
+  boards: BoardMetadata[];
   
-  boardId: null,
-  objects: {},
-  objectOrder: [],
+  // Board State
+  items: Record<string, CanvasItem>;
+  itemOrder: string[];
+  viewport: Viewport;
   
-  viewport: { x: 0, y: 0, zoom: 1 },
-  activeTool: ToolType.SELECT,
-  selectedIds: [],
-  isSpacePressed: false,
+  // Collaboration
+  peers: Record<string, UserState>;
   
-  strokeColor: '#000000',
-  strokeWidth: 2,
-  fillColor: 'transparent',
-  
-  peers: [],
-  isExporting: false,
+  // History
+  past: Op[];
+  future: Op[];
 
-  isAdminOpen: false,
-  isShareOpen: false,
-  isMenuOpen: false,
-  auditLogs: [
-    { id: '1', action: 'LOGIN', actor: 'Alice', resource: 'System', timestamp: new Date(Date.now() - 100000).toISOString() },
-    { id: '2', action: 'BOARD_CREATE', actor: 'Alice', resource: 'Board Q3', timestamp: new Date(Date.now() - 90000).toISOString() },
-  ],
-  webhooks: [],
-  offlineMode: false,
+  // Tools & UI
+  activeTool: ToolType;
+  selectedIds: string[];
+  isDragging: boolean;
+  defaultStyle: { stroke: string; fill: string; strokeWidth: number; strokeOpacity: number };
   
-  initBoard: (id) => {
-    set({ boardId: id });
-    // Connect to socket
-    socketService.connect(id, get().currentUser!);
-  },
+  // Actions
+  login: (name: string) => void;
+  createBoard: (name: string) => void;
+  openBoard: (id: string) => void;
+  deleteBoard: (id: string) => void;
+  exitBoard: () => void;
   
-  setViewport: (vp) => set(state => ({ viewport: { ...state.viewport, ...vp } })),
+  setViewport: (v: Viewport) => void;
+  setTool: (tool: ToolType) => void;
+  selectObject: (id: string | null, multi?: boolean) => void;
   
-  setTool: (tool) => set({ activeTool: tool, selectedIds: [] }),
+  // Styling
+  setStrokeColor: (color: string) => void;
+  setStrokeWidth: (width: number) => void;
+  setStrokeOpacity: (opacity: number) => void;
+  setBrushPreset: (type: 'pencil' | 'marker' | 'highlighter') => void;
+
+  // Op Actions (Undo/Redo aware)
+  dispatch: (op: Op, broadcast?: boolean) => void;
+  undo: () => void;
+  redo: () => void;
   
-  selectObjects: (ids, append = false) => set(state => ({
-    selectedIds: append ? [...state.selectedIds, ...ids] : ids
-  })),
+  // Presence
+  updateCursor: (pos: {x: number, y: number} | null) => void;
+}
+
+export const useStore = create<AppState>((set, get) => {
+  // --- Load Initial State ---
+  const savedUser = localStorage.getItem('cc_user');
+  const savedBoards = JSON.parse(localStorage.getItem('cc_boards') || '[]');
   
-  createObject: (obj) => {
-    const { currentUser, boardId } = get();
-    // Optimistic update
-    set(state => ({
-      objects: { ...state.objects, [obj.id]: obj },
-      objectOrder: [...state.objectOrder, obj.id]
-    }));
+  const initialUser = savedUser ? JSON.parse(savedUser) : null;
+
+  // --- Transport Listener ---
+  const handleMessage = (msg: any) => {
+    const state = get();
     
-    // Broadcast
-    if (currentUser && boardId && !get().offlineMode) {
-      const op: BoardOp = {
-        opId: nanoid(),
-        userId: currentUser.id,
-        type: 'ADD',
-        objectIds: [obj.id],
-        payload: obj
-      };
-      socketService.sendOp(op);
+    if (msg.type === 'OP') {
+      applyOpToState(set, msg.op);
+    } 
+    else if (msg.type === 'CURSOR') {
+       set(s => ({
+         peers: { ...s.peers, [msg.user.id]: msg.user }
+       }));
     }
+  };
+
+  return {
+    view: initialUser ? 'dashboard' : 'login',
+    currentUser: initialUser,
+    currentBoardId: null,
+    boards: savedBoards,
     
-    // Audit
-    if (currentUser) {
-      get().auditLogs.push({
-         id: nanoid(),
-         action: 'OBJECT_CREATE',
-         actor: currentUser.name,
-         resource: obj.type,
-         timestamp: new Date().toISOString()
+    items: {},
+    itemOrder: [],
+    viewport: { x: 0, y: 0, zoom: 1 },
+    peers: {},
+    past: [],
+    future: [],
+    
+    activeTool: 'select',
+    selectedIds: [],
+    isDragging: false,
+    defaultStyle: { stroke: '#000000', fill: 'transparent', strokeWidth: 4, strokeOpacity: 1 }, 
+
+    // --- Navigation Actions ---
+    login: (name) => {
+      const user: UserState = {
+        id: nanoid(),
+        name,
+        color: getRandomColor(),
+        cursor: null,
+        lastActive: Date.now()
+      };
+      localStorage.setItem('cc_user', JSON.stringify(user));
+      set({ currentUser: user, view: 'dashboard' });
+    },
+
+    createBoard: (name) => {
+      const newBoard: BoardMetadata = { id: nanoid(), name, updatedAt: Date.now() };
+      const boards = [newBoard, ...get().boards];
+      localStorage.setItem('cc_boards', JSON.stringify(boards));
+      set({ boards });
+    },
+
+    openBoard: (id) => {
+      const savedContent = localStorage.getItem(`cc_board_${id}`);
+      let content = { items: {}, itemOrder: [] };
+      if (savedContent) content = JSON.parse(savedContent);
+
+      transport.connect(id, handleMessage);
+      
+      set({ 
+        view: 'board', 
+        currentBoardId: id,
+        items: content.items,
+        itemOrder: content.itemOrder,
+        past: [],
+        future: [],
+        peers: {}
       });
-    }
-  },
-  
-  updateObject: (id, updates) => {
-    const { currentUser, boardId, objects } = get();
-    
-    // Phase 3: Lock Check
-    const obj = objects[id];
-    if (obj?.locked && obj.lockedBy !== currentUser?.id && !currentUser?.isAdmin) {
-      // Prevent edit if locked by someone else
-      return; 
-    }
+    },
 
-    set(state => ({
-      objects: {
-        ...state.objects,
-        [id]: { ...state.objects[id], ...updates } as BoardObject
-      }
-    }));
-    
-    // Broadcast (debouncing would happen in a real app)
-    if (currentUser && boardId && !get().offlineMode) {
-       const op: BoardOp = {
-        opId: nanoid(),
-        userId: currentUser.id,
-        type: 'UPDATE',
-        objectIds: [id],
-        payload: updates
-      };
-      socketService.sendOp(op);
-    }
-  },
-  
-  deleteObjects: (ids) => {
-    const { currentUser, boardId, objects } = get();
-    
-    // Phase 3: Filter out locked objects
-    const idsToDelete = ids.filter(id => {
-       const obj = objects[id];
-       if (obj?.locked && obj.lockedBy !== currentUser?.id && !currentUser?.isAdmin) return false;
-       return true;
-    });
+    deleteBoard: (id) => {
+       const boards = get().boards.filter(b => b.id !== id);
+       localStorage.setItem('cc_boards', JSON.stringify(boards));
+       set({ boards });
+    },
 
-    if (idsToDelete.length === 0) return;
+    exitBoard: () => {
+      transport.disconnect();
+      set({ view: 'dashboard', currentBoardId: null });
+    },
 
-    set(state => {
-      const newObjects = { ...state.objects };
-      idsToDelete.forEach(id => delete newObjects[id]);
-      return {
-        objects: newObjects,
-        objectOrder: state.objectOrder.filter(oid => !idsToDelete.includes(oid)),
-        selectedIds: []
-      };
-    });
-    
-     if (currentUser && boardId && !get().offlineMode) {
-       const op: BoardOp = {
-        opId: nanoid(),
-        userId: currentUser.id,
-        type: 'DELETE',
-        objectIds: idsToDelete
-      };
-      socketService.sendOp(op);
-    }
-  },
-  
-  // Phase 2: Async Export Simulation
-  triggerExport: async () => {
-    set({ isExporting: true });
-    // Simulate Bull Queue delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    set({ isExporting: false });
-    
-    // Audit
-    set(state => ({
-      auditLogs: [{
-        id: nanoid(), 
-        action: 'BOARD_EXPORT', 
-        actor: state.currentUser?.name || 'Unknown', 
-        resource: 'Board.png', 
-        timestamp: new Date().toISOString() 
-      }, ...state.auditLogs]
-    }));
-    
-    alert("Export Job Complete! (Simulated download)");
-  },
-  
-  // Phase 3 Actions
-  toggleAdmin: () => set(state => ({ isAdminOpen: !state.isAdminOpen })),
-  
-  setShareOpen: (open) => set({ isShareOpen: open }),
-  setMenuOpen: (open) => set({ isMenuOpen: open }),
-  
-  addWebhook: (url) => set(state => ({
-    webhooks: [...state.webhooks, { id: nanoid(), url, active: true, events: ['board.updated'] }]
-  })),
-
-  toggleLock: (id) => {
-    const { currentUser, objects } = get();
-    const obj = objects[id];
-    if (!obj || !currentUser) return;
-    
-    // Only owner or admin can unlock
-    if (obj.locked && obj.lockedBy !== currentUser.id && !currentUser.isAdmin) {
-      alert("You cannot unlock an object locked by someone else.");
-      return;
-    }
-
-    const updates = { 
-      locked: !obj.locked, 
-      lockedBy: !obj.locked ? currentUser.id : undefined 
-    };
-    get().updateObject(id, updates);
-  },
-  
-  setOfflineMode: (offline) => {
-    set({ offlineMode: offline });
-    if (offline) {
-       socketService.disconnect();
-    } else {
-       // In a real app, we would perform sync/merge here (CRDT sync)
-       const { boardId, currentUser } = get();
-       if (boardId && currentUser) socketService.connect(boardId, currentUser);
-    }
-  },
-
-  onPointerMove: (pt) => {
-    const { currentUser } = get();
-    if (currentUser && !get().offlineMode) {
-      socketService.sendCursor({ ...pt });
-    }
-  },
-  
-  applyRemoteOp: (op) => {
-    set(state => {
-      // In a real CRDT or server-authoritative model, we'd check sequence numbers here.
-      // For MVP, simplistic application.
-      if (op.type === 'ADD' && op.payload) {
-        const obj = op.payload as BoardObject;
-        return {
-          objects: { ...state.objects, [obj.id]: obj },
-          objectOrder: [...state.objectOrder, obj.id]
+    // --- Editor Actions ---
+    setViewport: (v) => set({ viewport: v }),
+    setTool: (t) => set({ activeTool: t, selectedIds: [] }),
+    selectObject: (id, multi = false) => set((state) => {
+      if (!id) return { selectedIds: [] };
+      if (multi) {
+        return { 
+          selectedIds: state.selectedIds.includes(id) 
+            ? state.selectedIds.filter(i => i !== id)
+            : [...state.selectedIds, id] 
         };
       }
-      if (op.type === 'UPDATE' && op.payload) {
-        const newObjects = { ...state.objects };
-        op.objectIds.forEach(id => {
-          if (newObjects[id]) {
-            newObjects[id] = { ...newObjects[id], ...op.payload } as BoardObject;
-          }
+      return { selectedIds: [id] };
+    }),
+
+    setStrokeColor: (color) => set(state => ({
+      defaultStyle: { ...state.defaultStyle, stroke: color },
+      items: updateSelectedItems(state, { stroke: color })
+    })),
+
+    setStrokeWidth: (width) => set(state => ({
+      defaultStyle: { ...state.defaultStyle, strokeWidth: width },
+      items: updateSelectedItems(state, { strokeWidth: width })
+    })),
+
+    setStrokeOpacity: (opacity) => set(state => ({
+      defaultStyle: { ...state.defaultStyle, strokeOpacity: opacity },
+      items: updateSelectedItems(state, { strokeOpacity: opacity })
+    })),
+
+    setBrushPreset: (type) => set(state => {
+      let style = { ...state.defaultStyle };
+      switch (type) {
+        case 'pencil':
+          style = { ...style, strokeWidth: 2, strokeOpacity: 1 };
+          break;
+        case 'marker':
+          style = { ...style, strokeWidth: 5, strokeOpacity: 1 };
+          break;
+        case 'highlighter':
+          style = { ...style, strokeWidth: 20, strokeOpacity: 0.4, stroke: '#f59e0b' }; // Default yellow
+          break;
+      }
+      return { defaultStyle: style };
+    }),
+
+    // --- Core Logic ---
+    dispatch: (op, broadcast = true) => {
+      const state = get();
+      
+      applyOpToState(set, op);
+      
+      set(s => ({
+        past: [...s.past, op],
+        future: [] 
+      }));
+
+      if (broadcast && state.currentBoardId) {
+        saveBoardState(state.currentBoardId, get().items, get().itemOrder);
+        transport.send({ 
+          type: 'OP', 
+          op, 
+          boardId: state.currentBoardId 
         });
-        return { objects: newObjects };
       }
-      if (op.type === 'DELETE') {
-         const newObjects = { ...state.objects };
-         op.objectIds.forEach(id => delete newObjects[id]);
-         return {
-            objects: newObjects,
-            objectOrder: state.objectOrder.filter(oid => !op.objectIds.includes(oid))
-         };
+    },
+
+    undo: () => {
+      const state = get();
+      if (state.past.length === 0) return;
+
+      const op = state.past[state.past.length - 1];
+      const inverseOp = getInverseOp(op);
+      
+      applyOpToState(set, inverseOp);
+
+      set(s => ({
+        past: s.past.slice(0, -1),
+        future: [op, ...s.future]
+      }));
+      
+      if (state.currentBoardId) {
+        transport.send({ 
+           type: 'OP', 
+           op: inverseOp, 
+           boardId: state.currentBoardId 
+        });
+        saveBoardState(state.currentBoardId, get().items, get().itemOrder);
       }
-      return state;
-    });
-  },
-  
-  updatePeer: (peer) => {
-    set(state => {
-      const index = state.peers.findIndex(p => p.id === peer.id);
-      if (index === -1) return { peers: [...state.peers, peer] };
-      const newPeers = [...state.peers];
-      newPeers[index] = peer;
-      return { peers: newPeers };
-    });
-  },
-  
-  removePeer: (userId) => {
-    set(state => ({ peers: state.peers.filter(p => p.id !== userId) }));
+    },
+
+    redo: () => {
+      const state = get();
+      if (state.future.length === 0) return;
+
+      const op = state.future[0];
+      
+      applyOpToState(set, op);
+
+      set(s => ({
+        future: s.future.slice(1),
+        past: [...s.past, op]
+      }));
+
+      if (state.currentBoardId) {
+        transport.send({ 
+           type: 'OP', 
+           op: op, 
+           boardId: state.currentBoardId 
+        });
+        saveBoardState(state.currentBoardId, get().items, get().itemOrder);
+      }
+    },
+
+    updateCursor: (point) => {
+      const state = get();
+      if (!state.currentUser || !state.currentBoardId) return;
+      transport.send({
+        type: 'CURSOR',
+        boardId: state.currentBoardId,
+        user: { ...state.currentUser, cursor: point, lastActive: Date.now() }
+      });
+    }
+  };
+});
+
+// --- Helper Functions ---
+
+function updateSelectedItems(state: AppState, patch: Partial<CanvasItem>) {
+  if (state.selectedIds.length === 0) return state.items;
+  const newItems = { ...state.items };
+  for (const id of state.selectedIds) {
+    if (newItems[id]) {
+      newItems[id] = { ...newItems[id], ...patch } as any;
+    }
   }
-}));
+  return newItems;
+}
+
+function applyOpToState(set: any, op: Op) {
+  set((state: AppState) => {
+    switch (op.type) {
+      case 'create':
+        return {
+          items: { ...state.items, [op.item.id]: op.item },
+          itemOrder: [...state.itemOrder, op.item.id]
+        };
+      case 'update':
+        if (!state.items[op.id]) return state;
+        return {
+          items: {
+            ...state.items,
+            [op.id]: { ...state.items[op.id], ...op.data }
+          }
+        };
+      case 'delete':
+        const newItems = { ...state.items };
+        delete newItems[op.id];
+        return {
+          items: newItems,
+          itemOrder: state.itemOrder.filter(id => id !== op.id),
+          selectedIds: state.selectedIds.filter(id => id !== op.id)
+        };
+      default:
+        return state;
+    }
+  });
+}
+
+function getInverseOp(op: Op): Op {
+  switch (op.type) {
+    case 'create':
+      return { type: 'delete', id: op.item.id, item: op.item };
+    case 'delete':
+      return { type: 'create', item: op.item };
+    case 'update':
+      return { type: 'update', id: op.id, data: op.prev, prev: op.data };
+  }
+}
+
+function saveBoardState(boardId: string, items: any, itemOrder: any) {
+  localStorage.setItem(`cc_board_${boardId}`, JSON.stringify({ items, itemOrder }));
+}

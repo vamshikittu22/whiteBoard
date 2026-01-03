@@ -1,82 +1,83 @@
-import React, { useState, useEffect } from 'react';
-import { Whiteboard } from './components/Canvas/Whiteboard';
-import { Toolbar } from './components/UI/Toolbar';
-import { Header } from './components/UI/Header';
-import { PropertiesPanel } from './components/UI/PropertiesPanel';
-import { HistoryPanel } from './components/UI/HistoryPanel';
-import { AdminPanel } from './components/UI/AdminPanel';
-import { ShareModal } from './components/UI/ShareModal';
-import { MainMenu } from './components/UI/MainMenu';
+import React, { useEffect, useState } from 'react';
+import { KonvaBoard } from './components/Canvas/KonvaBoard';
+import { Toolbar } from './components/Toolbar';
+import { Login } from './components/Login';
+import { Dashboard } from './components/Dashboard';
 import { useStore } from './store';
-import { nanoid } from 'nanoid';
-import { COLORS } from './types';
+import { ChevronLeft, Users, Share2 } from 'lucide-react';
 
-function App() {
-  const { currentUser, setCurrentUser, initBoard } = useStore();
-  const [name, setName] = useState('');
+export default function App() {
+  const { view, viewport, exitBoard, peers, currentUser, items } = useStore();
   
-  // Auth Simulation Screen
-  if (!currentUser) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-slate-50">
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-96 border border-slate-100">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold text-slate-800 mb-2">CollabCanvas</h1>
-            <p className="text-slate-500">Enter your name to join the session</p>
-          </div>
-          
-          <form 
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!name.trim()) return;
-              
-              const user = {
-                id: nanoid(),
-                name,
-                color: COLORS[Math.floor(Math.random() * COLORS.length)],
-                isAdmin: name.toLowerCase().includes('admin') // Simple mock for Enterprise Role
-              };
-              
-              setCurrentUser(user);
-              initBoard('demo-board');
-            }}
-          >
-            <input
-              type="text"
-              placeholder="Name (use 'admin' for superuser)"
-              className="w-full p-3 rounded-lg border border-slate-200 mb-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              autoFocus
-            />
-            <button 
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-blue-500/30"
-            >
-              Join Whiteboard
-            </button>
-          </form>
-          
-          <div className="mt-6 text-xs text-slate-400 text-center">
-             <p>Simulating Backend: Node.js, WebSocket, Redis, PostgreSQL</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Hydration check
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  if (view === 'login') return <Login />;
+  if (view === 'dashboard') return <Dashboard />;
 
   return (
-    <div className="w-screen h-screen relative overflow-hidden bg-slate-50">
-      <Header />
+    <div className="relative w-screen h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100">
+      
+      {/* --- UI Layer --- */}
+      
+      {/* Top Bar */}
+      <div className="absolute top-0 left-0 right-0 h-16 pointer-events-none z-50 flex items-center justify-between px-6">
+         {/* Left: Back & Title */}
+         <div className="pointer-events-auto flex items-center gap-4 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+            <button 
+              onClick={exitBoard}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"
+            >
+               <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div className="h-6 w-px bg-slate-200" />
+            <h1 className="font-semibold text-slate-700">Board</h1>
+            <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">Live</span>
+         </div>
+
+         {/* Right: Presence & Share */}
+         <div className="pointer-events-auto flex items-center gap-3">
+             {/* Avatars */}
+             <div className="flex -space-x-2">
+                <div className="w-8 h-8 rounded-full border-2 border-white bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700" title="You">
+                   {currentUser?.name[0]}
+                </div>
+                {Object.values(peers).map(peer => (
+                   <div key={peer.id} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-700" style={{backgroundColor: peer.color + '40', color: peer.color}} title={peer.name}>
+                      {peer.name[0]}
+                   </div>
+                ))}
+                {Object.keys(peers).length > 0 && (
+                   <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-50 flex items-center justify-center text-xs font-medium text-slate-500">
+                      +{Object.keys(peers).length}
+                   </div>
+                )}
+             </div>
+
+             <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg">
+                <Share2 className="w-4 h-4" />
+                Share
+            </button>
+         </div>
+      </div>
+
       <Toolbar />
-      <PropertiesPanel />
-      <HistoryPanel />
-      <AdminPanel />
-      <ShareModal />
-      <MainMenu />
-      <Whiteboard />
+
+      {/* Main Canvas */}
+      <KonvaBoard />
+
+      {/* Bottom Info */}
+      <div className="absolute bottom-6 right-6 flex flex-col gap-2 pointer-events-none z-40">
+        <div className="bg-white/90 backdrop-blur-sm border border-slate-200 px-4 py-2 rounded-xl text-xs font-mono text-slate-500 shadow-sm text-right">
+           {Object.keys(items).length} objects
+        </div>
+        <div className="bg-white/90 backdrop-blur-sm border border-slate-200 px-4 py-2 rounded-xl text-xs font-mono text-slate-500 shadow-sm text-right">
+           Zoom: {Math.round(viewport.zoom * 100)}%
+        </div>
+      </div>
+      
     </div>
   );
 }
-
-export default App;
