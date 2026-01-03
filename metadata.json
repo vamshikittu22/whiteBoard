@@ -1,0 +1,5 @@
+{
+  "name": "CollabCanvas",
+  "description": "A production-grade, real-time collaborative whiteboard with infinite canvas, vector tools, and multi-user presence.",
+  "requestFramePermissions": []
+}
