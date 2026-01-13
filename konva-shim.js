@@ -1,2 +1,2 @@
-// This file is no longer used. Konva is now mapped directly to esm.sh in index.html.
+// This file is no longer needed. Konva is mapped directly to the bundled ESM version in index.html.
 export default {};

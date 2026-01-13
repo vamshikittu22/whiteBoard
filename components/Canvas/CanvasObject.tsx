@@ -1,5 +1,5 @@
 import React from 'react';
-import { Rect, Circle, Line, Text, Group } from 'react-konva';
+import { Rect, Circle, Ellipse, Line, Text, Group } from 'react-konva';
 import { CanvasItem } from '../../types';
 
 interface Props {
@@ -58,37 +58,35 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect }) =>
       
     case 'ellipse':
       return (
-        <Circle
+        <Ellipse
           {...commonProps}
           {...shadowProps}
-          radius={item.radiusX}
-          scaleX={1}
-          scaleY={item.radiusY / item.radiusX}
+          radiusX={item.radiusX}
+          radiusY={item.radiusY}
           fill={item.fill || '#e2e8f0'}
           stroke={item.stroke || '#1e293b'}
           strokeWidth={item.strokeWidth || 2}
         />
       );
 
-    case 'path': // Pen tool lines
+    case 'path':
       return (
         <Line
           {...commonProps}
           points={item.points}
           stroke={item.stroke || '#1e293b'}
           strokeWidth={item.strokeWidth || 4}
-          opacity={item.strokeOpacity ?? 1} // Support for Highlighter opacity
+          opacity={item.strokeOpacity ?? 1}
           tension={item.tension || 0.5}
           lineCap="round"
           lineJoin="round"
-          hitStrokeWidth={20} // Easier selection
+          hitStrokeWidth={20}
         />
       );
 
     case 'sticky':
       return (
         <Group {...commonProps}>
-          {/* Note Body */}
           <Rect
             width={item.width}
             height={item.height}
@@ -100,7 +98,6 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect }) =>
             stroke={isSelected ? '#3b82f6' : 'transparent'}
             strokeWidth={isSelected ? 2 : 0}
           />
-          {/* Note Text */}
           <Text
             x={10}
             y={10}
