@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { KonvaBoard } from './components/Canvas/KonvaBoard';
 import { Toolbar } from './components/Toolbar';
@@ -5,6 +6,7 @@ import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { useStore } from './store';
 import { ChevronLeft, Users, Share2 } from 'lucide-react';
+import { UserState } from './types';
 
 export default function App() {
   const { view, viewport, exitBoard, peers, currentUser, items } = useStore();
@@ -44,7 +46,8 @@ export default function App() {
                 <div className="w-8 h-8 rounded-full border-2 border-white bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700" title="You">
                    {currentUser?.name[0]}
                 </div>
-                {Object.values(peers).map(peer => (
+                {/* Added explicit UserState typing to peer to fix property access errors on type unknown */}
+                {Object.values(peers).map((peer: UserState) => (
                    <div key={peer.id} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-700" style={{backgroundColor: peer.color + '40', color: peer.color}} title={peer.name}>
                       {peer.name[0]}
                    </div>

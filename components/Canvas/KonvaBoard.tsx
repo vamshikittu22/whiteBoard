@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Stage, Layer, Rect as KonvaRect, Path, Group, Label, Tag, Text, Line } from 'react-konva';
 import Konva from 'konva';
@@ -6,7 +7,7 @@ import { nanoid } from 'nanoid';
 import { useStore } from '../../store';
 import { screenToWorld } from '../../utils';
 import { CanvasObject } from './CanvasObject';
-import { CanvasItem } from '../../types';
+import { CanvasItem, UserState } from '../../types';
 
 // Standard cursor SVG path
 const CURSOR_PATH = "M5.65376 12.3673H5.46026L5.31717 12.4976L0.500002 16.8829L0.500002 1.19841L11.7841 12.3673H5.65376Z";
@@ -304,7 +305,8 @@ export const KonvaBoard = () => {
         })}
 
         {/* Render Remote Cursors */}
-        {Object.values(peers).map(peer => {
+        {/* Added explicit UserState typing to peer to fix property access errors on type unknown */}
+        {Object.values(peers).map((peer: UserState) => {
           if (!peer.cursor) return null;
           const timeSinceActive = Date.now() - peer.lastActive;
           

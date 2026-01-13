@@ -15,22 +15,21 @@
         background: #f8fafc; 
       }
     </style>
-    <!-- Load full Konva bundle globally to avoid missing shape errors -->
-    <script src="https://unpkg.com/konva@9.3.3/konva.min.js"></script>
     <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@18.2.0",
     "react/": "https://esm.sh/react@18.2.0/",
     "react-dom": "https://esm.sh/react-dom@18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
     "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-    "konva": "./konva-shim.js",
+    "konva": "https://esm.sh/konva@9.3.3",
+    "konva/": "https://esm.sh/konva@9.3.3/",
     "react-konva": "https://esm.sh/react-konva@18.2.10?external=react,react-dom,konva",
     "nanoid": "https://esm.sh/nanoid@5.0.4",
     "zustand": "https://esm.sh/zustand@4.5.0?external=react",
     "lucide-react": "https://esm.sh/lucide-react@0.303.0?external=react",
-    "zod": "https://esm.sh/zod@3.22.4",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+    "zod": "https://esm.sh/zod@3.22.4"
   }
 }
 </script>

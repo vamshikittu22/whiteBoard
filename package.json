@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "react": "18.2.0",
-    "react-dom": "^19.2.3",
-    "konva": "latest",
+    "react-dom": "18.2.0",
+    "konva": "9.3.3",
     "react-konva": "18.2.10",
     "nanoid": "5.0.4",
     "zustand": "4.5.0",
