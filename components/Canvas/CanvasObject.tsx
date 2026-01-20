@@ -6,6 +6,7 @@ interface Props {
   item: CanvasItem;
   isSelected: boolean;
   onSelect: (id: string) => void;
+  onUpdate: (id: string, data: Partial<CanvasItem>) => void;
 }
 
 const STICKY_COLORS: Record<string, string> = {
@@ -16,7 +17,7 @@ const STICKY_COLORS: Record<string, string> = {
   orange: '#ffedd5'
 };
 
-export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect }) => {
+export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUpdate }) => {
   const commonProps = {
     id: item.id,
     x: item.x,
@@ -32,6 +33,12 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect }) =>
       e.cancelBubble = true;
       onSelect(item.id);
     },
+    onDragEnd: (e: any) => {
+      onUpdate(item.id, {
+        x: e.target.x(),
+        y: e.target.y()
+      });
+    }
   };
 
   const shadowProps = isSelected ? {

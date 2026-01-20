@@ -1,36 +1,40 @@
 import Konva from 'konva';
 
-// Import the actual classes
-import { Rect } from 'konva/lib/shapes/Rect';
-import { Circle } from 'konva/lib/shapes/Circle';
-import { Ellipse } from 'konva/lib/shapes/Ellipse';
-import { Line } from 'konva/lib/shapes/Line';
-import { Path } from 'konva/lib/shapes/Path';
-import { Text } from 'konva/lib/shapes/Text';
-import { Group } from 'konva/lib/Group';
-import { Layer } from 'konva/lib/Layer';
-import { Stage } from 'konva/lib/Stage';
-
-// Manually register them on the Konva object that react-konva uses
-const k = Konva as any;
-k.Rect = Rect;
-k.Circle = Circle;
-k.Ellipse = Ellipse;
-k.Line = Line;
-k.Path = Path;
-k.Text = Text;
-k.Group = Group;
-k.Layer = Layer;
-k.Stage = Stage;
+/**
+ * Senior UI/UX Engineer Note:
+ * The 'konva' ESM build often packages everything into a default export.
+ * Named imports like { Circle } can fail if the module isn't strictly ESM-compliant.
+ * We access these via the default object to ensure compatibility across environments.
+ */
 
 if (typeof window !== 'undefined') {
-  (window as any).Konva = Konva;
-  console.log('Konva shapes manually registered:', {
-    Rect: !!k.Rect,
-    Circle: !!k.Circle,
-    Ellipse: !!k.Ellipse,
-    Line: !!k.Line,
-    Path: !!k.Path
+  const k = Konva as any;
+  
+  // Determine the primary Konva object (handling default export wrapping)
+  const konvaInstance = k.default || k;
+
+  // Ensure all standard shapes are attached to the main object
+  // react-konva looks for these keys (e.g. Konva['Rect']) to create canvas nodes.
+  const coreNodes = [
+    'Rect', 'Circle', 'Ellipse', 'Line', 'Path', 'Text', 
+    'Group', 'Layer', 'Stage', 'Transformer', 'Label', 'Tag'
+  ];
+
+  // If we are dealing with a 'default' wrapper, flatten it to the top level
+  if (k.default) {
+    coreNodes.forEach(node => {
+      if (!k[node] && k.default[node]) {
+        k[node] = k.default[node];
+      }
+    });
+  }
+
+  // Expose to window for react-konva's internal detection logic
+  (window as any).Konva = konvaInstance;
+  
+  console.log('🏗️ [CollabCanvas] Konva Registry Initialized', {
+    version: konvaInstance.version,
+    ready: !!konvaInstance.Rect
   });
 }
 

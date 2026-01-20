@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CollabCanvas</title>
+    <title>CollabCanvas | Collaborative Whiteboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -14,6 +14,17 @@
         overflow: hidden; 
         background: #f8fafc; 
       }
+      ::selection {
+        background-color: rgba(99, 102, 241, 0.2);
+      }
+      /* Smooth transitions for UI elements */
+      .animate-fade-in {
+        animation: fadeIn 0.2s ease-out;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
     </style>
     <script type="importmap">
 {
@@ -23,8 +34,8 @@
     "react-dom": "https://esm.sh/react-dom@18.2.0",
     "react-dom/": "https://esm.sh/react-dom@18.2.0/",
     "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-    "konva": "https://esm.sh/konva@9.3.3",
-    "konva/": "https://esm.sh/konva@9.3.3/",
+    "konva": "https://esm.sh/konva@9.3.6",
+    "konva/": "https://esm.sh/konva@9.3.6/",
     "react-konva": "https://esm.sh/react-konva@18.2.10?external=react,react-dom,konva",
     "nanoid": "https://esm.sh/nanoid@5.0.4",
     "zustand": "https://esm.sh/zustand@4.5.0?external=react",
