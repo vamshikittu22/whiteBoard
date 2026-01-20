@@ -22,8 +22,8 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUp
     id: item.id,
     x: item.x,
     y: item.y,
-    rotation: item.rotation,
-    opacity: item.opacity,
+    rotation: item.rotation || 0,
+    opacity: item.opacity ?? 1,
     draggable: isSelected && !item.isLocked,
     onClick: (e: any) => {
       e.cancelBubble = true;
@@ -42,11 +42,12 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUp
   };
 
   const shadowProps = isSelected ? {
-    shadowColor: 'rgba(0,0,0,0.15)',
-    shadowBlur: 20,
-    shadowOffset: { x: 0, y: 10 },
-    shadowOpacity: 0.5
+    shadowColor: 'rgba(59, 130, 246, 0.5)',
+    shadowBlur: 10,
+    shadowOpacity: 0.6
   } : {};
+
+  const defaultFill = 'rgba(241, 245, 249, 0.2)'; 
 
   switch (item.type) {
     case 'rect':
@@ -56,7 +57,7 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUp
           {...shadowProps}
           width={item.width}
           height={item.height}
-          fill={item.fill || '#e2e8f0'}
+          fill={item.fill && item.fill !== 'transparent' ? item.fill : defaultFill}
           stroke={item.stroke || '#1e293b'}
           strokeWidth={item.strokeWidth || 2}
           cornerRadius={item.cornerRadius || 4}
@@ -70,7 +71,7 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUp
           {...shadowProps}
           radiusX={item.radiusX}
           radiusY={item.radiusY}
-          fill={item.fill || '#e2e8f0'}
+          fill={item.fill && item.fill !== 'transparent' ? item.fill : defaultFill}
           stroke={item.stroke || '#1e293b'}
           strokeWidth={item.strokeWidth || 2}
         />
@@ -87,7 +88,8 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUp
           tension={item.tension || 0.5}
           lineCap="round"
           lineJoin="round"
-          hitStrokeWidth={20}
+          // Crucial for selection of thin lines
+          hitStrokeWidth={Math.max(25, item.strokeWidth || 4)}
         />
       );
 
@@ -100,21 +102,22 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUp
             fill={STICKY_COLORS[item.color] || STICKY_COLORS.yellow}
             shadowColor="rgba(0,0,0,0.1)"
             shadowBlur={5}
-            shadowOffset={{ x: 2, y: 2 }}
-            cornerRadius={0}
-            stroke={isSelected ? '#3b82f6' : 'transparent'}
-            strokeWidth={isSelected ? 2 : 0}
+            cornerRadius={2}
+            stroke={isSelected ? '#3b82f6' : 'rgba(0,0,0,0.05)'}
+            strokeWidth={isSelected ? 2 : 1}
           />
           <Text
-            x={10}
-            y={10}
-            width={item.width - 20}
-            height={item.height - 20}
+            x={15}
+            y={15}
+            width={item.width - 30}
+            height={item.height - 30}
             text={item.text}
             fontSize={16}
-            fontFamily="Inter, sans-serif"
-            fill="#1e293b"
+            fontFamily="Inter"
+            fill="#334155"
             wrap="word"
+            lineHeight={1.4}
+            listening={false}
           />
         </Group>
       );
@@ -128,6 +131,7 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUp
           fontFamily={item.fontFamily}
           fill={item.fill || '#1e293b'}
           width={item.width}
+          padding={4}
         />
       );
 

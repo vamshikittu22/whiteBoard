@@ -2,40 +2,40 @@ import Konva from 'konva';
 
 /**
  * Senior UI/UX Engineer Note:
- * The 'konva' ESM build often packages everything into a default export.
- * Named imports like { Circle } can fail if the module isn't strictly ESM-compliant.
- * We access these via the default object to ensure compatibility across environments.
+ * This registry is critical for react-konva. If the reconciler doesn't find
+ * 'Line' or 'Rect' on the Konva object, it fallbacks to a 'Group', causing 
+ * properties like 'points', 'width', and 'stroke' to be ignored.
  */
 
 if (typeof window !== 'undefined') {
-  const k = Konva as any;
+  // Ensure we have a reference to the actual Konva object (handling esm.sh variations)
+  const k = (Konva as any).default || Konva;
   
-  // Determine the primary Konva object (handling default export wrapping)
-  const konvaInstance = k.default || k;
-
-  // Ensure all standard shapes are attached to the main object
-  // react-konva looks for these keys (e.g. Konva['Rect']) to create canvas nodes.
-  const coreNodes = [
+  // These are the internal names react-konva uses to find classes
+  const shapeNames = [
     'Rect', 'Circle', 'Ellipse', 'Line', 'Path', 'Text', 
     'Group', 'Layer', 'Stage', 'Transformer', 'Label', 'Tag'
   ];
 
-  // If we are dealing with a 'default' wrapper, flatten it to the top level
-  if (k.default) {
-    coreNodes.forEach(node => {
-      if (!k[node] && k.default[node]) {
-        k[node] = k.default[node];
+  // Force-attach shapes if they are missing from the primary object
+  // but present in the namespace or sub-objects
+  shapeNames.forEach(name => {
+    if (!k[name]) {
+      // Sometimes esm.sh puts them inside the default object
+      if (k.default && k.default[name]) {
+        k[name] = k.default[name];
       }
-    });
-  }
+    }
+  });
 
-  // Expose to window for react-konva's internal detection logic
-  (window as any).Konva = konvaInstance;
-  
-  console.log('🏗️ [CollabCanvas] Konva Registry Initialized', {
-    version: konvaInstance.version,
-    ready: !!konvaInstance.Rect
+  // Expose to window immediately. React-Konva checks window.Konva as a fallback.
+  (window as any).Konva = k;
+
+  console.log('🛡️ [CollabCanvas] Registry Guard:', {
+    hasLine: !!k.Line,
+    hasRect: !!k.Rect,
+    version: k.version
   });
 }
 
-export {};
+export default {};
