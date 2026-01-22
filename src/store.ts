@@ -3,8 +3,10 @@ import { nanoid } from 'nanoid';
 import { CanvasItem, ToolType, Viewport, UserState, Op } from './types';
 import { createTransport, TransportLayer } from './transport';
 import { storage } from './persistence';
+import { api } from './lib/api';
 
-const transport: TransportLayer = createTransport();
+const CLIENT_ID = nanoid();
+let transport: TransportLayer | null = null;
 
 // --- Constants ---
 const COLORS = ['#ef4444', '#f97316', '#f59e0b', '#10b981', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899'];
@@ -20,6 +22,7 @@ interface AppState {
   // Navigation
   view: 'login' | 'dashboard' | 'board';
   currentUser: UserState | null;
+  accessToken: string | null;
   currentBoardId: string | null;
   boards: BoardMetadata[];
 
@@ -42,8 +45,9 @@ interface AppState {
   defaultStyle: { stroke: string; fill: string; strokeWidth: number; strokeOpacity: number };
 
   // Actions
-  login: (name: string) => void;
-  createBoard: (name: string) => void;
+  login: (email: string, name?: string, password?: string, isRegister?: boolean) => Promise<void>;
+  loadBoards: () => Promise<void>;
+  createBoard: (name: string) => Promise<void>;
   openBoard: (id: string) => void;
   deleteBoard: (id: string) => void;
   exitBoard: () => void;
@@ -70,9 +74,10 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => {
   // --- Load Initial State ---
   const savedUser = storage.getItem('cc_user');
-  const savedBoards = JSON.parse(storage.getItem('cc_boards') || '[]');
+  const savedToken = storage.getItem('cc_token');
 
   const initialUser = savedUser ? JSON.parse(savedUser) : null;
+  if (savedToken) api.setToken(savedToken);
 
   // --- Transport Listener ---
   const handleMessage = (msg: any) => {
@@ -80,6 +85,14 @@ export const useStore = create<AppState>((set, get) => {
 
     if (msg.type === 'OP') {
       applyOpToState(set, msg.op);
+    }
+    else if (msg.type === 'STATE_INIT') {
+      set({
+        items: msg.items,
+        itemOrder: msg.itemOrder,
+        past: [],
+        future: []
+      });
     }
     else if (msg.type === 'CURSOR') {
       set(s => ({
@@ -91,8 +104,9 @@ export const useStore = create<AppState>((set, get) => {
   return {
     view: initialUser ? 'dashboard' : 'login',
     currentUser: initialUser,
+    accessToken: savedToken,
     currentBoardId: null,
-    boards: savedBoards,
+    boards: [],
 
     items: {},
     itemOrder: [],
@@ -107,51 +121,92 @@ export const useStore = create<AppState>((set, get) => {
     defaultStyle: { stroke: '#000000', fill: 'transparent', strokeWidth: 4, strokeOpacity: 1 },
 
     // --- Navigation Actions ---
-    login: (name) => {
-      const user: UserState = {
-        id: nanoid(),
-        name,
-        color: getRandomColor(),
-        cursor: null,
-        lastActive: Date.now()
-      };
-      storage.setItem('cc_user', JSON.stringify(user));
-      set({ currentUser: user, view: 'dashboard' });
+    login: async (emailOrName, name, password, isRegister = false) => {
+      try {
+        let endpoint, payload;
+
+        // Check if it's a guest login (called as login(name))
+        const isGuest = !password && !isRegister && emailOrName && !name;
+
+        if (isGuest) {
+          endpoint = '/api/auth/guest';
+          payload = { name: emailOrName };
+        } else {
+          endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
+          payload = { email: emailOrName, name, password };
+        }
+
+        const data = await api.post(endpoint, payload);
+
+        const user = {
+          ...data.user,
+          color: getRandomColor(),
+          cursor: null,
+          lastActive: Date.now()
+        };
+
+        storage.setItem('cc_user', JSON.stringify(user));
+        storage.setItem('cc_token', data.accessToken);
+        api.setToken(data.accessToken);
+
+        set({ currentUser: user, accessToken: data.accessToken, view: 'dashboard' });
+        get().loadBoards();
+      } catch (error) {
+        console.error('Login failed:', error);
+        throw error;
+      }
     },
 
-    createBoard: (name) => {
-      const newBoard: BoardMetadata = { id: nanoid(), name, updatedAt: Date.now() };
-      const boards = [newBoard, ...get().boards];
-      storage.setItem('cc_boards', JSON.stringify(boards));
-      set({ boards });
+    loadBoards: async () => {
+      try {
+        const boards = await api.get('/api/boards');
+        set({ boards });
+      } catch (error) {
+        console.error('Failed to load boards:', error);
+      }
     },
 
-    openBoard: (id) => {
-      const savedContent = storage.getItem(`cc_board_${id}`);
-      let content = { items: {}, itemOrder: [] };
-      if (savedContent) content = JSON.parse(savedContent);
+    createBoard: async (name) => {
+      try {
+        const newBoard = await api.post('/api/boards', { name });
+        set(s => ({ boards: [newBoard, ...s.boards] }));
+      } catch (error) {
+        console.error('Failed to create board:', error);
+      }
+    },
 
+    openBoard: async (id) => {
+      const state = get();
+      if (!state.accessToken) return;
+
+      transport = createTransport('socketio', state.accessToken, CLIENT_ID);
       transport.connect(id, handleMessage);
 
       set({
         view: 'board',
         currentBoardId: id,
-        items: content.items,
-        itemOrder: content.itemOrder,
+        items: {}, // Will be populated by transport
+        itemOrder: [], // Will be populated by transport
         past: [],
         future: [],
         peers: {}
       });
     },
 
-    deleteBoard: (id) => {
-      const boards = get().boards.filter(b => b.id !== id);
-      storage.setItem('cc_boards', JSON.stringify(boards));
-      set({ boards });
+    deleteBoard: async (id) => {
+      try {
+        await api.delete(`/api/boards/${id}`);
+        set(s => ({ boards: s.boards.filter(b => b.id !== id) }));
+      } catch (error) {
+        console.error('Failed to delete board:', error);
+      }
     },
 
     exitBoard: () => {
-      transport.disconnect();
+      if (transport) {
+        transport.disconnect();
+        transport = null;
+      }
       set({ view: 'dashboard', currentBoardId: null });
     },
 
@@ -212,8 +267,8 @@ export const useStore = create<AppState>((set, get) => {
         future: []
       }));
 
-      if (broadcast && state.currentBoardId) {
-        saveBoardState(state.currentBoardId, get().items, get().itemOrder);
+      if (broadcast && state.currentBoardId && transport) {
+        // saveBoardState(state.currentBoardId, get().items, get().itemOrder); // Server handles persistence now
         transport.send({
           type: 'OP',
           op,
@@ -236,13 +291,12 @@ export const useStore = create<AppState>((set, get) => {
         future: [op, ...s.future]
       }));
 
-      if (state.currentBoardId) {
+      if (state.currentBoardId && transport) {
         transport.send({
           type: 'OP',
           op: inverseOp,
           boardId: state.currentBoardId
         });
-        saveBoardState(state.currentBoardId, get().items, get().itemOrder);
       }
     },
 
@@ -259,19 +313,18 @@ export const useStore = create<AppState>((set, get) => {
         past: [...s.past, op]
       }));
 
-      if (state.currentBoardId) {
+      if (state.currentBoardId && transport) {
         transport.send({
           type: 'OP',
           op: op,
           boardId: state.currentBoardId
         });
-        saveBoardState(state.currentBoardId, get().items, get().itemOrder);
       }
     },
 
     updateCursor: (point) => {
       const state = get();
-      if (!state.currentUser || !state.currentBoardId) return;
+      if (!state.currentUser || !state.currentBoardId || !transport) return;
       transport.send({
         type: 'CURSOR',
         boardId: state.currentBoardId,

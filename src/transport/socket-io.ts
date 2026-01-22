@@ -20,7 +20,7 @@ export class SocketIoTransport implements TransportLayer {
         this.onMessageCallback = onMessage;
 
         // Connect to Socket.IO server
-        this.socket = io(import.meta.env.VITE_API_URL || 'http://localhost:4000', {
+        this.socket = io((import.meta as any).env.VITE_API_URL || 'http://localhost:4000', {
             auth: {
                 token: this.accessToken,
                 clientId: this.clientId
@@ -41,8 +41,32 @@ export class SocketIoTransport implements TransportLayer {
                 console.log('[SocketIoTransport] Joined board:', boardId);
                 console.log('[SocketIoTransport] Current seq:', response.lastSeq);
 
-                // TODO: Apply snapshot and pending ops to state
-                // For now, just log
+                if (this.onMessageCallback) {
+                    // 1. Clear current state and apply snapshot if it exists
+                    if (response.snapshot) {
+                        this.onMessageCallback({
+                            type: 'STATE_INIT',
+                            items: response.snapshot.items,
+                            itemOrder: response.snapshot.itemOrder,
+                            boardId
+                        } as any);
+                    }
+
+                    // 2. Play catch-up with missed operations
+                    if (response.ops && response.ops.length > 0) {
+                        console.log(`[SocketIoTransport] Applying ${response.ops.length} missed operations`);
+                        for (const op of response.ops) {
+                            this.onMessageCallback({
+                                type: 'OP',
+                                op: {
+                                    type: op.opType,
+                                    ...op.opData
+                                },
+                                boardId
+                            });
+                        }
+                    }
+                }
             });
         });
 

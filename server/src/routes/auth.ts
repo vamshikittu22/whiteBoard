@@ -5,6 +5,44 @@ import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// Guest Login
+router.post('/guest', async (req, res) => {
+    try {
+        const { name } = req.body;
+        // Generate a random guest email
+        const randomId = Math.random().toString(36).substring(2, 10);
+        const email = `guest_${Date.now()}_${randomId}@collabcanvas.com`;
+
+        // Hash a dummy password
+        const hashedPassword = await hashPassword('guest_password');
+
+        const user = await prisma.user.create({
+            data: {
+                email,
+                name: name || 'Guest',
+                password: hashedPassword
+            },
+            select: { id: true, email: true, name: true, createdAt: true, orgId: true }
+        });
+
+        const accessToken = generateAccessToken({ userId: user.id, email: user.email });
+        const refreshToken = generateRefreshToken({ userId: user.id, email: user.email });
+
+        await prisma.refreshToken.create({
+            data: {
+                token: refreshToken,
+                userId: user.id,
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+            }
+        });
+
+        res.json({ user, accessToken, refreshToken });
+    } catch (error) {
+        console.error('[Auth] Guest login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Register
 router.post('/register', async (req, res) => {
     try {

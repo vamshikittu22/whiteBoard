@@ -4,21 +4,19 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  orgId       String?
-  org         Org?          @relation(fields: [orgId], references: [id])
-  memberships BoardMember[]
+  id            String         @id @default(uuid())
+  email         String         @unique
+  name          String
+  password      String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  orgId         String?
+  memberships   BoardMember[]
   refreshTokens RefreshToken[]
+  org           Org?           @relation(fields: [orgId], references: [id])
 
   @@index([email])
 }
@@ -28,21 +26,18 @@ model Org {
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  users  User[]
-  boards Board[]
+  boards    Board[]
+  users     User[]
 }
 
 model Board {
-  id        String   @id @default(uuid())
+  id        String          @id @default(uuid())
   name      String
-  lastSeq   Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  orgId String?
-  org   Org?    @relation(fields: [orgId], references: [id])
-
+  lastSeq   Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  orgId     String?
+  org       Org?            @relation(fields: [orgId], references: [id])
   members   BoardMember[]
   ops       BoardOp[]
   snapshots BoardSnapshot[]
@@ -51,13 +46,12 @@ model Board {
 }
 
 model BoardMember {
-  id     String @id @default(uuid())
-  role   String @default("VIEWER")  // OWNER | EDITOR | VIEWER
-  userId String
+  id      String @id @default(uuid())
+  role    String @default("VIEWER")
+  userId  String
   boardId String
-
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, boardId])
   @@index([boardId])
@@ -67,13 +61,12 @@ model BoardOp {
   id        String   @id @default(uuid())
   boardId   String
   serverSeq Int
-  opId      String   // Client-generated idempotency key
-  clientId  String   // User session/connection ID
-  opType    String   // 'create', 'update', 'delete'
-  opData    Json     // Full operation payload
+  opId      String
+  clientId  String
+  opType    String
+  opData    Json
   createdAt DateTime @default(now())
-
-  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   @@unique([boardId, opId, clientId])
   @@index([boardId, serverSeq])
@@ -82,12 +75,11 @@ model BoardOp {
 model BoardSnapshot {
   id        String   @id @default(uuid())
   boardId   String
-  seq       Int      // Sequence number at time of snapshot
-  items     Json     // Complete board state
-  itemOrder Json     // Item order array
+  seq       Int
+  items     Json
+  itemOrder Json
   createdAt DateTime @default(now())
-
-  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   @@index([boardId, seq])
 }
@@ -98,8 +90,7 @@ model RefreshToken {
   userId    String
   expiresAt DateTime
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([token])
