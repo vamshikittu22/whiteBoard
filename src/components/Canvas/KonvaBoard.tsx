@@ -6,7 +6,8 @@ import { nanoid } from 'nanoid';
 import { useStore } from '../../store';
 import { screenToWorld } from '../../utils';
 import { CanvasObject } from './CanvasObject';
-import { CanvasItem, UserState } from '../../types';
+import { TextEditor } from './TextEditor';
+import { CanvasItem, UserState, Point } from '../../types';
 
 const CURSOR_PATH = "M5.65376 12.3673H5.46026L5.31717 12.4976L0.500002 16.8829L0.500002 1.19841L11.7841 12.3673H5.65376Z";
 
@@ -16,12 +17,13 @@ export const KonvaBoard = () => {
     items, itemOrder, activeTool, viewport, peers,
     setViewport, setTool,
     dispatch, selectObject, selectedIds, defaultStyle,
-    updateCursor
+    updateCursor, currentBoardId, exportTrigger
   } = useStore();
 
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShapeId, setCurrentShapeId] = useState<string | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
   const handleUpdate = useCallback((id: string, data: Partial<CanvasItem>) => {
     const item = items[id];
@@ -47,9 +49,22 @@ export const KonvaBoard = () => {
 
       const keyMap: Record<string, any> = {
         'v': 'select', 'h': 'hand', 'p': 'pen', 'r': 'rect',
-        'o': 'ellipse', 's': 'sticky', 't': 'text', 'e': 'eraser'
+        'o': 'ellipse', 's': 'sticky', 't': 'text', 'e': 'eraser', 'l': 'line'
       };
       if (keyMap[e.key]) setTool(keyMap[e.key]);
+
+      // Delete selected objects
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
+        e.preventDefault();
+        const state = useStore.getState();
+        selectedIds.forEach(id => {
+          const item = state.items[id];
+          if (item) {
+            state.dispatch({ type: 'delete', id, item });
+          }
+        });
+        selectObject(null);
+      }
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
@@ -142,6 +157,9 @@ export const KonvaBoard = () => {
     } else if (activeTool === 'pen') {
       // Initialize with 2 points (4 coordinates) so it's immediately visible
       newItem = { type: 'path', id, x: 0, y: 0, points: [pos.x, pos.y, pos.x, pos.y], ...style };
+    } else if (activeTool === 'line') {
+      // Straight line from start to end
+      newItem = { type: 'line', id, x: 0, y: 0, points: [pos.x, pos.y, pos.x, pos.y], ...style };
     } else if (activeTool === 'sticky') {
       newItem = { type: 'sticky', id, x: pos.x - 75, y: pos.y - 75, width: 150, height: 150, text: 'New Note', color: 'yellow' };
       dispatch({ type: 'create', item: newItem });
@@ -152,13 +170,12 @@ export const KonvaBoard = () => {
     } else if (activeTool === 'text') {
       newItem = {
         type: 'text', id, x: pos.x, y: pos.y,
-        text: 'Type here', fontSize: 24, fontFamily: 'Inter',
+        text: '', fontSize: 24, fontFamily: 'Inter',
         ...style, fill: style.stroke
       };
       dispatch({ type: 'create', item: newItem });
       setIsDrawing(false);
-      setTool('select');
-      selectObject(id);
+      setEditingTextId(id); // Open editor immediately
       return;
     }
 
@@ -181,7 +198,7 @@ export const KonvaBoard = () => {
     const pos = screenToWorld(stage.getPointerPosition()!, viewport);
 
     // Throttle cursor updates slightly? No, keeping real-time for now
-    updateCursor(pos);
+    updateCursor({ x: pos.x, y: pos.y });
 
     if (!isDrawing || !currentShapeId) return;
 
@@ -210,6 +227,15 @@ export const KonvaBoard = () => {
         data: { points: newPoints },
         prev: { points: startItem.points }
       });
+    } else if (startItem.type === 'line') {
+      // Update end point of line
+      const newPoints = [startItem.points[0], startItem.points[1], pos.x, pos.y];
+      dispatch({
+        type: 'update',
+        id: currentShapeId,
+        data: { points: newPoints },
+        prev: { points: startItem.points }
+      });
     }
   };
 
@@ -232,54 +258,127 @@ export const KonvaBoard = () => {
     return lines;
   }, []);
 
+  // Handle Export to Image
+  useEffect(() => {
+    if (exportTrigger > 0 && stageRef.current) {
+      const dataURL = stageRef.current.toDataURL({
+        pixelRatio: 2, // Higher quality
+        backgroundColor: '#ffffff'
+      });
+      const link = document.createElement('a');
+      link.download = `board-${currentBoardId || 'export'}.png`;
+      link.href = dataURL;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  }, [exportTrigger, currentBoardId]);
+
+  // Handle text editor submit
+  const handleTextSubmit = useCallback((text: string) => {
+    if (editingTextId && text.trim()) {
+      handleUpdate(editingTextId, { text });
+    } else if (editingTextId && !text.trim()) {
+      // Delete empty text items
+      const item = items[editingTextId];
+      if (item) {
+        dispatch({ type: 'delete', id: editingTextId, item });
+      }
+    }
+    setEditingTextId(null);
+    setTool('select');
+  }, [editingTextId, handleUpdate, items, dispatch, setTool]);
+
+  const handleTextCancel = useCallback(() => {
+    if (editingTextId) {
+      const item = items[editingTextId];
+      if (item && item.type === 'text' && !item.text) {
+        dispatch({ type: 'delete', id: editingTextId, item });
+      }
+    }
+    setEditingTextId(null);
+    setTool('select');
+  }, [editingTextId, items, dispatch, setTool]);
+
+  // Get editing text item for TextEditor
+  const editingTextItem = editingTextId ? items[editingTextId] : null;
+
   return (
-    <Stage
-      ref={stageRef}
-      width={window.innerWidth}
-      height={window.innerHeight}
-      onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      x={viewport.x}
-      y={viewport.y}
-      scaleX={viewport.zoom}
-      scaleY={viewport.zoom}
-      draggable={activeTool === 'hand' || isSpacePressed}
-      style={{ cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : 'default' }}
-    >
-      <Layer>
-        <KonvaRect id="bg-rect" x={-10000} y={-10000} width={20000} height={20000} fill="#fcfdfe" listening={true} />
-        <Group listening={false}>{gridLines}</Group>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <Stage
+        ref={stageRef}
+        width={window.innerWidth}
+        height={window.innerHeight}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        x={viewport.x}
+        y={viewport.y}
+        scaleX={viewport.zoom}
+        scaleY={viewport.zoom}
+        draggable={activeTool === 'hand' || isSpacePressed}
+        style={{ cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : 'default' }}
+      >
+        <Layer>
+          <KonvaRect id="bg-rect" x={-10000} y={-10000} width={20000} height={20000} fill="#fcfdfe" listening={true} />
+          <Group listening={false}>{gridLines}</Group>
 
-        {itemOrder.map(id => {
-          const item = items[id];
-          if (!item) return null;
-          return (
-            <CanvasObject
-              key={id}
-              item={item}
-              isSelected={selectedIds.includes(id)}
-              onSelect={(id) => activeTool === 'select' && selectObject(id)}
-              onUpdate={handleUpdate}
-            />
-          );
-        })}
+          {itemOrder.map(id => {
+            const item = items[id];
+            if (!item) return null;
+            // Hide text item being edited
+            if (id === editingTextId) return null;
+            return (
+              <CanvasObject
+                key={id}
+                item={item}
+                isSelected={selectedIds.includes(id)}
+                onSelect={(id, multi) => activeTool === 'select' && selectObject(id, multi)}
+                onUpdate={handleUpdate}
+                onDoubleClick={(id) => {
+                  const clickedItem = items[id];
+                  if (clickedItem && (clickedItem.type === 'text' || clickedItem.type === 'sticky')) {
+                    setEditingTextId(id);
+                  }
+                }}
+              />
+            );
+          })}
 
-        {Object.values(peers).map((peer: UserState) => {
-          if (!peer.cursor) return null;
-          const opacity = Math.max(0, 1 - (Date.now() - peer.lastActive) / 10000);
-          return (
-            <Group key={peer.id} x={peer.cursor.x} y={peer.cursor.y} opacity={opacity} listening={false}>
-              <Path data={CURSOR_PATH} fill={peer.color} />
-              <Label x={12} y={12}>
-                <Tag fill={peer.color} cornerRadius={4} />
-                <Text text={peer.name} fontFamily="Inter" fontSize={11} padding={4} fill="white" fontStyle="bold" />
-              </Label>
-            </Group>
-          );
-        })}
-      </Layer>
-    </Stage>
+          {Object.values(peers).map((peer: UserState) => {
+            if (!peer.cursor) return null;
+            const opacity = Math.max(0, 1 - (Date.now() - peer.lastActive) / 10000);
+            return (
+              <Group key={peer.id} x={peer.cursor.x} y={peer.cursor.y} opacity={opacity} listening={false}>
+                <Path data={CURSOR_PATH} fill={peer.color} />
+                <Label x={12} y={12}>
+                  <Tag fill={peer.color} cornerRadius={4} />
+                  <Text text={peer.name} fontFamily="Inter" fontSize={11} padding={4} fill="white" fontStyle="bold" />
+                </Label>
+              </Group>
+            );
+          })}
+        </Layer>
+      </Stage>
+
+      {/* Text Editor Overlay */}
+      {editingTextItem && editingTextItem.type === 'text' && (
+        <TextEditor
+          x={editingTextItem.x}
+          y={editingTextItem.y}
+          width={editingTextItem.width || 200}
+          text={editingTextItem.text}
+          fontSize={editingTextItem.fontSize}
+          fontFamily={editingTextItem.fontFamily}
+          color={editingTextItem.fill || '#000000'}
+          zoom={viewport.zoom}
+          viewportX={viewport.x}
+          viewportY={viewport.y}
+          onSubmit={handleTextSubmit}
+          onCancel={handleTextCancel}
+        />
+      )}
+    </div>
   );
 };

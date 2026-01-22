@@ -16,7 +16,7 @@ export type Dimensions = z.infer<typeof DimensionsSchema>;
 export const RGBAColorSchema = z.string();
 
 // --- Tools ---
-export const ToolTypeSchema = z.enum(['select', 'hand', 'rect', 'ellipse', 'path', 'text', 'sticky', 'eraser', 'pen']);
+export const ToolTypeSchema = z.enum(['select', 'hand', 'rect', 'ellipse', 'line', 'path', 'text', 'sticky', 'eraser', 'pen']);
 export type ToolType = z.infer<typeof ToolTypeSchema>;
 
 // --- Board Objects ---
@@ -70,11 +70,18 @@ export const StickyObjectSchema = BaseObjectSchema.extend({
   color: z.enum(['yellow', 'blue', 'green', 'pink', 'orange']),
 });
 
+export const LineObjectSchema = BaseObjectSchema.extend({
+  type: z.literal('line'),
+  points: z.array(z.number()), // [x1, y1, x2, y2] for straight line
+  arrowEnd: z.boolean().optional(),
+});
+
 // Union of all objects
 export const CanvasItemSchema = z.discriminatedUnion('type', [
   RectObjectSchema,
   EllipseObjectSchema,
   PathObjectSchema,
+  LineObjectSchema,
   TextObjectSchema,
   StickyObjectSchema,
 ]);
@@ -85,7 +92,8 @@ export type CanvasItem = z.infer<typeof CanvasItemSchema>;
 export type Op =
   | { type: 'create'; item: CanvasItem }
   | { type: 'update'; id: string; data: Partial<CanvasItem>; prev: Partial<CanvasItem> } // Prev required for undo
-  | { type: 'delete'; id: string; item: CanvasItem }; // Item required for undo
+  | { type: 'delete'; id: string; item: CanvasItem } // Item required for undo
+  | { type: 'clear' };
 
 // --- Application State Interfaces ---
 export interface Viewport {

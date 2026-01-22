@@ -43,6 +43,7 @@ interface AppState {
   selectedIds: string[];
   isDragging: boolean;
   defaultStyle: { stroke: string; fill: string; strokeWidth: number; strokeOpacity: number };
+  exportTrigger: number;
 
   // Actions
   login: (email: string, name?: string, password?: string, isRegister?: boolean) => Promise<void>;
@@ -66,6 +67,7 @@ interface AppState {
   dispatch: (op: Op, broadcast?: boolean) => void;
   undo: () => void;
   redo: () => void;
+  triggerExport: () => void;
 
   // Presence
   updateCursor: (pos: { x: number, y: number } | null) => void;
@@ -77,7 +79,13 @@ export const useStore = create<AppState>((set, get) => {
   const savedToken = storage.getItem('cc_token');
 
   const initialUser = savedUser ? JSON.parse(savedUser) : null;
-  if (savedToken) api.setToken(savedToken);
+  if (savedToken) {
+    api.setToken(savedToken);
+    // Explicitly load boards if token exists
+    setTimeout(() => {
+      useStore.getState().loadBoards();
+    }, 0);
+  }
 
   // --- Transport Listener ---
   const handleMessage = (msg: any) => {
@@ -119,6 +127,7 @@ export const useStore = create<AppState>((set, get) => {
     selectedIds: [],
     isDragging: false,
     defaultStyle: { stroke: '#000000', fill: 'transparent', strokeWidth: 4, strokeOpacity: 1 },
+    exportTrigger: 0,
 
     // --- Navigation Actions ---
     login: async (emailOrName, name, password, isRegister = false) => {
@@ -330,7 +339,9 @@ export const useStore = create<AppState>((set, get) => {
         boardId: state.currentBoardId,
         user: { ...state.currentUser, cursor: point, lastActive: Date.now() }
       });
-    }
+    },
+
+    triggerExport: () => set(s => ({ exportTrigger: s.exportTrigger + 1 }))
   };
 });
 
@@ -371,6 +382,14 @@ export function applyOpToState(set: any, op: Op) {
           itemOrder: state.itemOrder.filter(id => id !== op.id),
           selectedIds: state.selectedIds.filter(id => id !== op.id)
         };
+      case 'clear':
+        return {
+          items: {},
+          itemOrder: [],
+          selectedIds: [],
+          past: [],
+          future: []
+        };
       default:
         return state;
     }
@@ -385,6 +404,10 @@ export function getInverseOp(op: Op): Op {
       return { type: 'create', item: op.item };
     case 'update':
       return { type: 'update', id: op.id, data: op.prev, prev: op.data };
+    case 'clear':
+      return { type: 'clear' }; // Destructive
+    default:
+      throw new Error('Unknown op type');
   }
 }
 

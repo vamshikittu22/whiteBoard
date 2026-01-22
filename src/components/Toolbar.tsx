@@ -1,9 +1,9 @@
 import React from 'react';
 import { useStore } from '../store';
-import { 
-  MousePointer2, Hand, Square, Circle, PenTool, 
+import {
+  MousePointer2, Hand, Square, Circle, PenTool,
   Type, StickyNote, Eraser, Undo2, Redo2, Minus,
-  Highlighter, Pen, Pencil
+  Highlighter, Pen, Pencil, Download, Trash2
 } from 'lucide-react';
 import { ToolType } from '../types';
 import { cn } from '../utils';
@@ -14,6 +14,7 @@ const tools: { id: ToolType; icon: React.FC<any>; label: string; shortcut: strin
   { id: 'pen', icon: PenTool, label: 'Pen', shortcut: 'P' },
   { id: 'rect', icon: Square, label: 'Rectangle', shortcut: 'R' },
   { id: 'ellipse', icon: Circle, label: 'Circle', shortcut: 'O' },
+  { id: 'line', icon: Minus, label: 'Line', shortcut: 'L' },
   { id: 'sticky', icon: StickyNote, label: 'Sticky', shortcut: 'S' },
   { id: 'text', icon: Type, label: 'Text', shortcut: 'T' },
   { id: 'eraser', icon: Eraser, label: 'Eraser', shortcut: 'E' },
@@ -35,17 +36,24 @@ const STROKE_WIDTHS = [
 ];
 
 export const Toolbar = () => {
-  const { 
+  const {
     activeTool, setTool, undo, redo, past, future,
-    defaultStyle, setStrokeColor, setStrokeWidth, setBrushPreset
+    defaultStyle, setStrokeColor, setStrokeWidth, setBrushPreset,
+    triggerExport, dispatch
   } = useStore();
+
+  const handleClear = () => {
+    if (window.confirm('Are you sure you want to clear the entire board? This cannot be undone.')) {
+      dispatch({ type: 'clear' });
+    }
+  };
 
   const showProperties = ['pen', 'rect', 'ellipse', 'text', 'select'].includes(activeTool);
   const isPen = activeTool === 'pen';
 
   return (
     <div className="absolute left-4 top-1/2 -translate-y-1/2 flex gap-4 z-50 items-start">
-      
+
       <div className="flex flex-col gap-4">
         {/* Main Tools */}
         <div className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-xl rounded-2xl p-2 flex flex-col gap-2">
@@ -55,13 +63,13 @@ export const Toolbar = () => {
               onClick={() => setTool(item.id)}
               className={cn(
                 "p-3 rounded-xl transition-all duration-200 group relative flex items-center justify-center",
-                activeTool === item.id 
-                  ? "bg-slate-900 text-white shadow-lg shadow-slate-300" 
+                activeTool === item.id
+                  ? "bg-slate-900 text-white shadow-lg shadow-slate-300"
                   : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               )}
             >
               <item.icon className="w-5 h-5" strokeWidth={2.5} />
-              
+
               {/* Tooltip */}
               <span className="absolute left-full ml-4 px-2 py-1 bg-slate-900 text-white text-xs font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                 {item.label} <span className="opacity-50 ml-1">({item.shortcut})</span>
@@ -89,88 +97,115 @@ export const Toolbar = () => {
             <Redo2 className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Board Actions */}
+        <div className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-xl rounded-2xl p-2 flex flex-col gap-2">
+          <button
+            onClick={triggerExport}
+            className="p-3 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors"
+            title="Export as PNG"
+          >
+            <Download className="w-5 h-5" />
+          </button>
+          <button
+            onClick={handleClear}
+            className="p-3 rounded-xl text-red-500 hover:bg-red-50 transition-colors"
+            title="Clear Board"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Properties Panel (Side) */}
       {showProperties && (
-         <div className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-xl rounded-2xl p-4 flex flex-col gap-4 animate-in fade-in slide-in-from-left-4 duration-200">
-            
-            {/* Brush Presets (Only for Pen) */}
-            {isPen && (
-              <div className="space-y-2">
-                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Brush Type</span>
-                 <div className="flex gap-2">
-                    <button 
-                      onClick={() => setBrushPreset('pencil')}
-                      className={cn("p-2 rounded-lg hover:bg-slate-100", defaultStyle.strokeWidth === 2 && "bg-slate-100 ring-1 ring-slate-900")}
-                      title="Pencil"
-                    >
-                      <Pencil className="w-5 h-5 text-slate-700" />
-                    </button>
-                    <button 
-                      onClick={() => setBrushPreset('marker')}
-                      className={cn("p-2 rounded-lg hover:bg-slate-100", defaultStyle.strokeWidth === 5 && "bg-slate-100 ring-1 ring-slate-900")}
-                      title="Marker"
-                    >
-                      <Pen className="w-5 h-5 text-slate-700" />
-                    </button>
-                    <button 
-                      onClick={() => setBrushPreset('highlighter')}
-                      className={cn("p-2 rounded-lg hover:bg-slate-100", defaultStyle.strokeWidth === 20 && "bg-slate-100 ring-1 ring-slate-900")}
-                      title="Highlighter"
-                    >
-                      <Highlighter className="w-5 h-5 text-slate-700" />
-                    </button>
-                 </div>
-                 <div className="h-px bg-slate-100 w-full" />
+        <div className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-xl rounded-2xl p-4 flex flex-col gap-4 animate-in fade-in slide-in-from-left-4 duration-200">
+
+          {/* Brush Presets (Only for Pen) */}
+          {isPen && (
+            <div className="space-y-2">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Brush Type</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setBrushPreset('pencil')}
+                  className={cn("p-2 rounded-lg hover:bg-slate-100", defaultStyle.strokeWidth === 2 && "bg-slate-100 ring-1 ring-slate-900")}
+                  title="Pencil"
+                >
+                  <Pencil className="w-5 h-5 text-slate-700" />
+                </button>
+                <button
+                  onClick={() => setBrushPreset('marker')}
+                  className={cn("p-2 rounded-lg hover:bg-slate-100", defaultStyle.strokeWidth === 5 && "bg-slate-100 ring-1 ring-slate-900")}
+                  title="Marker"
+                >
+                  <Pen className="w-5 h-5 text-slate-700" />
+                </button>
+                <button
+                  onClick={() => setBrushPreset('highlighter')}
+                  className={cn("p-2 rounded-lg hover:bg-slate-100", defaultStyle.strokeWidth === 20 && "bg-slate-100 ring-1 ring-slate-900")}
+                  title="Highlighter"
+                >
+                  <Highlighter className="w-5 h-5 text-slate-700" />
+                </button>
               </div>
-            )}
-
-            {/* Colors */}
-            <div className="space-y-2">
-               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Color</span>
-               <div className="flex flex-col gap-2">
-                  {COLORS.map(c => (
-                     <button
-                        key={c.value}
-                        onClick={() => setStrokeColor(c.value)}
-                        className={cn(
-                           "w-8 h-8 rounded-full border-2 transition-transform hover:scale-110",
-                           defaultStyle.stroke === c.value ? "border-slate-900 scale-110" : "border-transparent"
-                        )}
-                        style={{ backgroundColor: c.value }}
-                        title={c.label}
-                     />
-                  ))}
-               </div>
+              <div className="h-px bg-slate-100 w-full" />
             </div>
+          )}
 
-            {/* Separator */}
-            <div className="h-px bg-slate-100 w-full" />
-
-            {/* Sizes */}
-            <div className="space-y-2">
-               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Thickness</span>
-               <div className="flex flex-col gap-2 items-center">
-                  {STROKE_WIDTHS.map(s => (
-                     <button
-                        key={s.value}
-                        onClick={() => setStrokeWidth(s.value)}
-                        className={cn(
-                           "w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors",
-                           defaultStyle.strokeWidth === s.value && "bg-slate-100 ring-1 ring-slate-900"
-                        )}
-                        title={s.label}
-                     >
-                        <div 
-                           className="bg-slate-900 rounded-full" 
-                           style={{ width: s.value, height: s.value }} 
-                        />
-                     </button>
-                  ))}
-               </div>
+          {/* Colors */}
+          <div className="space-y-2">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Color</span>
+            <div className="flex flex-col gap-2">
+              {/* Custom Color Picker */}
+              <input
+                type="color"
+                value={defaultStyle.stroke}
+                onChange={(e) => setStrokeColor(e.target.value)}
+                className="w-8 h-8 rounded-full border-2 border-slate-200 cursor-pointer"
+                title="Custom Color"
+              />
+              {/* Preset Colors */}
+              {COLORS.map(c => (
+                <button
+                  key={c.value}
+                  onClick={() => setStrokeColor(c.value)}
+                  className={cn(
+                    "w-8 h-8 rounded-full border-2 transition-transform hover:scale-110",
+                    defaultStyle.stroke === c.value ? "border-slate-900 scale-110" : "border-transparent"
+                  )}
+                  style={{ backgroundColor: c.value }}
+                  title={c.label}
+                />
+              ))}
             </div>
-         </div>
+          </div>
+
+          {/* Separator */}
+          <div className="h-px bg-slate-100 w-full" />
+
+          {/* Sizes */}
+          <div className="space-y-2">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Thickness</span>
+            <div className="flex flex-col gap-2 items-center">
+              {STROKE_WIDTHS.map(s => (
+                <button
+                  key={s.value}
+                  onClick={() => setStrokeWidth(s.value)}
+                  className={cn(
+                    "w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors",
+                    defaultStyle.strokeWidth === s.value && "bg-slate-100 ring-1 ring-slate-900"
+                  )}
+                  title={s.label}
+                >
+                  <div
+                    className="bg-slate-900 rounded-full"
+                    style={{ width: s.value, height: s.value }}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

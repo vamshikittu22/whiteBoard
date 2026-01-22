@@ -5,8 +5,9 @@ import { CanvasItem } from '../../types';
 interface Props {
   item: CanvasItem;
   isSelected: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, multi: boolean) => void;
   onUpdate: (id: string, data: Partial<CanvasItem>) => void;
+  onDoubleClick?: (id: string) => void;
 }
 
 const STICKY_COLORS: Record<string, string> = {
@@ -17,7 +18,7 @@ const STICKY_COLORS: Record<string, string> = {
   orange: '#ffedd5'
 };
 
-export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUpdate }) => {
+export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUpdate, onDoubleClick }) => {
   const commonProps = {
     id: item.id,
     x: item.x,
@@ -27,11 +28,19 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUp
     draggable: isSelected && !item.isLocked,
     onClick: (e: any) => {
       e.cancelBubble = true;
-      onSelect(item.id);
+      onSelect(item.id, e.evt.shiftKey);
     },
     onTap: (e: any) => {
       e.cancelBubble = true;
-      onSelect(item.id);
+      onSelect(item.id, e.evt.shiftKey);
+    },
+    onDblClick: (e: any) => {
+      e.cancelBubble = true;
+      onDoubleClick?.(item.id);
+    },
+    onDblTap: (e: any) => {
+      e.cancelBubble = true;
+      onDoubleClick?.(item.id);
     },
     onDragEnd: (e: any) => {
       onUpdate(item.id, {
@@ -41,13 +50,14 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUp
     }
   };
 
+
   const shadowProps = isSelected ? {
     shadowColor: 'rgba(59, 130, 246, 0.5)',
     shadowBlur: 10,
     shadowOpacity: 0.6
   } : {};
 
-  const defaultFill = 'rgba(241, 245, 249, 0.2)'; 
+  const defaultFill = 'rgba(241, 245, 249, 0.2)';
 
   switch (item.type) {
     case 'rect':
@@ -63,7 +73,7 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUp
           cornerRadius={item.cornerRadius || 4}
         />
       );
-      
+
     case 'ellipse':
       return (
         <Ellipse
@@ -90,6 +100,18 @@ export const CanvasObject: React.FC<Props> = ({ item, isSelected, onSelect, onUp
           lineJoin="round"
           // Crucial for selection of thin lines
           hitStrokeWidth={Math.max(25, item.strokeWidth || 4)}
+        />
+      );
+
+    case 'line':
+      return (
+        <Line
+          {...commonProps}
+          points={item.points}
+          stroke={item.stroke || '#1e293b'}
+          strokeWidth={item.strokeWidth || 2}
+          lineCap="round"
+          hitStrokeWidth={Math.max(25, item.strokeWidth || 2)}
         />
       );
 
