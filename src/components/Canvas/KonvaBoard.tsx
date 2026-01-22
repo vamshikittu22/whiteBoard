@@ -12,9 +12,9 @@ const CURSOR_PATH = "M5.65376 12.3673H5.46026L5.31717 12.4976L0.500002 16.8829L0
 
 export const KonvaBoard = () => {
   const stageRef = useRef<any>(null);
-  const { 
+  const {
     items, itemOrder, activeTool, viewport, peers,
-    setViewport, setTool, 
+    setViewport, setTool,
     dispatch, selectObject, selectedIds, defaultStyle,
     updateCursor
   } = useStore();
@@ -22,7 +22,7 @@ export const KonvaBoard = () => {
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShapeId, setCurrentShapeId] = useState<string | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
-  
+
   const handleUpdate = useCallback((id: string, data: Partial<CanvasItem>) => {
     const item = items[id];
     if (!item) return;
@@ -50,7 +50,7 @@ export const KonvaBoard = () => {
         'o': 'ellipse', 's': 'sticky', 't': 'text', 'e': 'eraser'
       };
       if (keyMap[e.key]) setTool(keyMap[e.key]);
-      
+
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
         useStore.getState().undo();
@@ -60,7 +60,7 @@ export const KonvaBoard = () => {
         useStore.getState().redo();
       }
     };
-    
+
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') setIsSpacePressed(false);
     };
@@ -109,7 +109,7 @@ export const KonvaBoard = () => {
   const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
     if (!stage) return;
-    
+
     if (e.evt.button === 1 || isSpacePressed || activeTool === 'hand') return;
 
     const pos = screenToWorld(stage.getPointerPosition()!, viewport);
@@ -148,10 +148,10 @@ export const KonvaBoard = () => {
       setIsDrawing(false);
       setTool('select');
       selectObject(id);
-      return; 
+      return;
     } else if (activeTool === 'text') {
-      newItem = { 
-        type: 'text', id, x: pos.x, y: pos.y, 
+      newItem = {
+        type: 'text', id, x: pos.x, y: pos.y,
         text: 'Type here', fontSize: 24, fontFamily: 'Inter',
         ...style, fill: style.stroke
       };
@@ -170,37 +170,46 @@ export const KonvaBoard = () => {
   const handleMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
     if (!stage) return;
-    
+
+    // Safety check: if drawing but no mouse button pressed, stop drawing
+    if (isDrawing && e.evt.buttons === 0) {
+      setIsDrawing(false);
+      setCurrentShapeId(null);
+      return;
+    }
+
     const pos = screenToWorld(stage.getPointerPosition()!, viewport);
+
+    // Throttle cursor updates slightly? No, keeping real-time for now
     updateCursor(pos);
 
     if (!isDrawing || !currentShapeId) return;
-    
+
     const startItem = items[currentShapeId];
     if (!startItem) return;
 
     if (startItem.type === 'rect') {
-       dispatch({ 
-         type: 'update', 
-         id: currentShapeId, 
-         data: { width: pos.x - startItem.x, height: pos.y - startItem.y }, 
-         prev: { width: startItem.width, height: startItem.height } 
-       });
+      dispatch({
+        type: 'update',
+        id: currentShapeId,
+        data: { width: pos.x - startItem.x, height: pos.y - startItem.y },
+        prev: { width: startItem.width, height: startItem.height }
+      });
     } else if (startItem.type === 'ellipse') {
-        dispatch({
-          type: 'update', 
-          id: currentShapeId, 
-          data: { radiusX: Math.abs(pos.x - startItem.x), radiusY: Math.abs(pos.y - startItem.y) },
-          prev: { radiusX: startItem.radiusX, radiusY: startItem.radiusY }
-        });
+      dispatch({
+        type: 'update',
+        id: currentShapeId,
+        data: { radiusX: Math.abs(pos.x - startItem.x), radiusY: Math.abs(pos.y - startItem.y) },
+        prev: { radiusX: startItem.radiusX, radiusY: startItem.radiusY }
+      });
     } else if (startItem.type === 'path') {
-        const newPoints = [...startItem.points, pos.x, pos.y];
-        dispatch({
-          type: 'update',
-          id: currentShapeId,
-          data: { points: newPoints },
-          prev: { points: startItem.points }
-        });
+      const newPoints = [...startItem.points, pos.x, pos.y];
+      dispatch({
+        type: 'update',
+        id: currentShapeId,
+        data: { points: newPoints },
+        prev: { points: startItem.points }
+      });
     }
   };
 
@@ -217,8 +226,8 @@ export const KonvaBoard = () => {
     const GRID_SIZE = 50;
     const GRID_EXTENT = 5000;
     for (let i = -GRID_EXTENT; i <= GRID_EXTENT; i += GRID_SIZE) {
-       lines.push(<Line key={`v${i}`} points={[i, -GRID_EXTENT, i, GRID_EXTENT]} stroke="#f1f5f9" strokeWidth={1} listening={false} perfectDrawEnabled={false} />);
-       lines.push(<Line key={`h${i}`} points={[-GRID_EXTENT, i, GRID_EXTENT, i]} stroke="#f1f5f9" strokeWidth={1} listening={false} perfectDrawEnabled={false} />);
+      lines.push(<Line key={`v${i}`} points={[i, -GRID_EXTENT, i, GRID_EXTENT]} stroke="#f1f5f9" strokeWidth={1} listening={false} perfectDrawEnabled={false} />);
+      lines.push(<Line key={`h${i}`} points={[-GRID_EXTENT, i, GRID_EXTENT, i]} stroke="#f1f5f9" strokeWidth={1} listening={false} perfectDrawEnabled={false} />);
     }
     return lines;
   }, []);
@@ -242,7 +251,7 @@ export const KonvaBoard = () => {
       <Layer>
         <KonvaRect id="bg-rect" x={-10000} y={-10000} width={20000} height={20000} fill="#fcfdfe" listening={true} />
         <Group listening={false}>{gridLines}</Group>
-        
+
         {itemOrder.map(id => {
           const item = items[id];
           if (!item) return null;
@@ -261,13 +270,13 @@ export const KonvaBoard = () => {
           if (!peer.cursor) return null;
           const opacity = Math.max(0, 1 - (Date.now() - peer.lastActive) / 10000);
           return (
-             <Group key={peer.id} x={peer.cursor.x} y={peer.cursor.y} opacity={opacity} listening={false}>
-                <Path data={CURSOR_PATH} fill={peer.color} />
-                <Label x={12} y={12}>
-                   <Tag fill={peer.color} cornerRadius={4} />
-                   <Text text={peer.name} fontFamily="Inter" fontSize={11} padding={4} fill="white" fontStyle="bold" />
-                </Label>
-             </Group>
+            <Group key={peer.id} x={peer.cursor.x} y={peer.cursor.y} opacity={opacity} listening={false}>
+              <Path data={CURSOR_PATH} fill={peer.color} />
+              <Label x={12} y={12}>
+                <Tag fill={peer.color} cornerRadius={4} />
+                <Text text={peer.name} fontFamily="Inter" fontSize={11} padding={4} fill="white" fontStyle="bold" />
+              </Label>
+            </Group>
           );
         })}
       </Layer>

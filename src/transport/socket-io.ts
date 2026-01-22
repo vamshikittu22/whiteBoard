@@ -134,7 +134,8 @@ export class SocketIoTransport implements TransportLayer {
                 if (response.error) {
                     console.error('[SocketIoTransport] SUBMIT_OP error:', response.error);
                 } else {
-                    console.log('[SocketIoTransport] Op acknowledged, serverSeq:', response.serverSeq);
+                    // console.log('[SocketIoTransport] Op acknowledged, serverSeq:', response.serverSeq);
+                    // logging less frequently or just errors is better for production
                 }
             });
         } else if (msg.type === 'CURSOR') {

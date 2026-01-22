@@ -84,7 +84,7 @@ export function initializeSocketServer(httpServer: HttpServer) {
                 const opsAfterSnapshot = await prisma.boardOp.findMany({
                     where: {
                         boardId,
-                        serverSeq: { gt: latestSnapshot?.seq || BigInt(0) }
+                        serverSeq: { gt: latestSnapshot?.seq || 0 }
                     },
                     orderBy: { serverSeq: 'asc' }
                 });
@@ -93,14 +93,14 @@ export function initializeSocketServer(httpServer: HttpServer) {
                     snapshot: latestSnapshot ? {
                         items: latestSnapshot.items,
                         itemOrder: latestSnapshot.itemOrder,
-                        seq: latestSnapshot.seq.toString()
+                        seq: String(latestSnapshot.seq)
                     } : { items: {}, itemOrder: [], seq: '0' },
                     ops: opsAfterSnapshot.map(op => ({
-                        serverSeq: op.serverSeq.toString(),
+                        serverSeq: String(op.serverSeq),
                         opType: op.opType,
                         opData: op.opData
                     })),
-                    lastSeq: board.lastSeq.toString(),
+                    lastSeq: String(board.lastSeq),
                     role: membership.role
                 });
 
@@ -180,13 +180,13 @@ export function initializeSocketServer(httpServer: HttpServer) {
 
                 // Send ACK to sender
                 callback({
-                    serverSeq: serverSeq.toString(),
+                    serverSeq: String(serverSeq),
                     acknowledged: true
                 });
 
                 // Broadcast to others in the room
                 socket.to(`board:${boardId}`).emit('OP_BROADCAST', {
-                    serverSeq: serverSeq.toString(),
+                    serverSeq: String(serverSeq),
                     opType,
                     opData,
                     userId: socket.data.userId

@@ -82,7 +82,7 @@ export const CanvasItemSchema = z.discriminatedUnion('type', [
 export type CanvasItem = z.infer<typeof CanvasItemSchema>;
 
 // --- Operations (for Undo/Redo & Sync) ---
-export type Op = 
+export type Op =
   | { type: 'create'; item: CanvasItem }
   | { type: 'update'; id: string; data: Partial<CanvasItem>; prev: Partial<CanvasItem> } // Prev required for undo
   | { type: 'delete'; id: string; item: CanvasItem }; // Item required for undo
@@ -97,6 +97,7 @@ export interface Viewport {
 export interface UserState {
   id: string;
   name: string;
+  email?: string; // Added for compatibility with transport layer
   color: string;
   cursor: Point | null;
   lastActive: number;
