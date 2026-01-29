@@ -292,7 +292,7 @@ export const KonvaBoard = () => {
   const handleTextCancel = useCallback(() => {
     if (editingTextId) {
       const item = items[editingTextId];
-      if (item && item.type === 'text' && !item.text) {
+      if (item && isTextItem(item) && !item.text) {
         dispatch({ type: 'delete', id: editingTextId, item });
       }
     }
@@ -302,6 +302,11 @@ export const KonvaBoard = () => {
 
   // Get editing text item for TextEditor
   const editingTextItem = editingTextId ? items[editingTextId] : null;
+
+  // Type guard for text items
+  const isTextItem = (item: CanvasItem | null): item is CanvasItem & { type: 'text'; text: string; fontSize: number; fontFamily: string; width?: number } => {
+    return item?.type === 'text';
+  };
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -363,7 +368,7 @@ export const KonvaBoard = () => {
       </Stage>
 
       {/* Text Editor Overlay */}
-      {editingTextItem && editingTextItem.type === 'text' && (
+      {editingTextItem && isTextItem(editingTextItem) && (
         <TextEditor
           x={editingTextItem.x}
           y={editingTextItem.y}
