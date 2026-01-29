@@ -308,17 +308,6 @@ export const KonvaBoard = () => {
   // Get editing text item for TextEditor (use pending item as fallback for newly created items)
   const editingTextItem = editingTextId ? (items[editingTextId] || pendingTextItem) : null;
 
-  // Debug logging
-  if (editingTextId) {
-    console.log('[TextEditor Debug]', {
-      editingTextId,
-      hasItemInStore: !!items[editingTextId],
-      hasPendingItem: !!pendingTextItem,
-      editingTextItem,
-      itemType: editingTextItem?.type
-    });
-  }
-
   // Type guard for text items
   const isTextItem = (item: CanvasItem | null): item is CanvasItem & { type: 'text'; text: string; fontSize: number; fontFamily: string; width?: number; fill?: string } => {
     return item?.type === 'text';
@@ -394,29 +383,22 @@ export const KonvaBoard = () => {
       </Stage>
 
       {/* Text Editor Overlay for Text Items */}
-      {(() => {
-        const shouldShowTextEditor = editingTextItem && editingTextItem.type === 'text';
-        console.log('[TextEditor Render Check - Text]', { editingTextItem, shouldShowTextEditor, itemType: editingTextItem?.type });
-        if (!shouldShowTextEditor) return null;
-
-        const textItem = editingTextItem as any;
-        return (
-          <TextEditor
-            x={textItem.x}
-            y={textItem.y}
-            width={textItem.width || 200}
-            text={textItem.text}
-            fontSize={textItem.fontSize}
-            fontFamily={textItem.fontFamily}
-            color={textItem.fill || '#000000'}
-            zoom={viewport.zoom}
-            viewportX={viewport.x}
-            viewportY={viewport.y}
-            onSubmit={handleTextSubmit}
-            onCancel={handleTextCancel}
-          />
-        );
-      })()}
+      {editingTextItem && editingTextItem.type === 'text' && (
+        <TextEditor
+          x={(editingTextItem as any).x}
+          y={(editingTextItem as any).y}
+          width={(editingTextItem as any).width || 200}
+          text={(editingTextItem as any).text}
+          fontSize={(editingTextItem as any).fontSize}
+          fontFamily={(editingTextItem as any).fontFamily}
+          color={(editingTextItem as any).fill || '#000000'}
+          zoom={viewport.zoom}
+          viewportX={viewport.x}
+          viewportY={viewport.y}
+          onSubmit={handleTextSubmit}
+          onCancel={handleTextCancel}
+        />
+      )}
 
       {/* Text Editor Overlay for Sticky Notes */}
       {editingTextItem && isStickyItem(editingTextItem) && (

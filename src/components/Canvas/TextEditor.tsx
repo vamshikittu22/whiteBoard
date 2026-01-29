@@ -26,15 +26,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
     let screenX = x * zoom + viewportX;
     let screenY = y * zoom + viewportY;
 
-    // Debug position calculation
-    console.log('[TextEditor Position]', {
-        worldX: x, worldY: y,
-        zoom, viewportX, viewportY,
-        screenX, screenY,
-        windowWidth: window.innerWidth,
-        windowHeight: window.innerHeight
-    });
-
     // Clamp to visible screen bounds
     screenX = Math.max(10, Math.min(screenX, window.innerWidth - 200));
     screenY = Math.max(10, Math.min(screenY, window.innerHeight - 100));
