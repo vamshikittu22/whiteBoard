@@ -292,7 +292,8 @@ export const KonvaBoard = () => {
   const handleTextCancel = useCallback(() => {
     if (editingTextId) {
       const item = items[editingTextId];
-      if (item && isTextItem(item) && !item.text) {
+      // Delete empty text items (but not sticky notes - they have default text)
+      if (item && item.type === 'text' && !item.text) {
         dispatch({ type: 'delete', id: editingTextId, item });
       }
     }
@@ -304,8 +305,18 @@ export const KonvaBoard = () => {
   const editingTextItem = editingTextId ? items[editingTextId] : null;
 
   // Type guard for text items
-  const isTextItem = (item: CanvasItem | null): item is CanvasItem & { type: 'text'; text: string; fontSize: number; fontFamily: string; width?: number } => {
+  const isTextItem = (item: CanvasItem | null): item is CanvasItem & { type: 'text'; text: string; fontSize: number; fontFamily: string; width?: number; fill?: string } => {
     return item?.type === 'text';
+  };
+
+  // Type guard for sticky items
+  const isStickyItem = (item: CanvasItem | null): item is CanvasItem & { type: 'sticky'; text: string; width: number; height: number; color: string } => {
+    return item?.type === 'sticky';
+  };
+
+  // Check if item is editable (text or sticky)
+  const isEditableItem = (item: CanvasItem | null): boolean => {
+    return isTextItem(item) || isStickyItem(item);
   };
 
   return (
@@ -367,7 +378,7 @@ export const KonvaBoard = () => {
         </Layer>
       </Stage>
 
-      {/* Text Editor Overlay */}
+      {/* Text Editor Overlay for Text Items */}
       {editingTextItem && isTextItem(editingTextItem) && (
         <TextEditor
           x={editingTextItem.x}
@@ -377,6 +388,24 @@ export const KonvaBoard = () => {
           fontSize={editingTextItem.fontSize}
           fontFamily={editingTextItem.fontFamily}
           color={editingTextItem.fill || '#000000'}
+          zoom={viewport.zoom}
+          viewportX={viewport.x}
+          viewportY={viewport.y}
+          onSubmit={handleTextSubmit}
+          onCancel={handleTextCancel}
+        />
+      )}
+
+      {/* Text Editor Overlay for Sticky Notes */}
+      {editingTextItem && isStickyItem(editingTextItem) && (
+        <TextEditor
+          x={editingTextItem.x + 15}
+          y={editingTextItem.y + 15}
+          width={editingTextItem.width - 30}
+          text={editingTextItem.text}
+          fontSize={16}
+          fontFamily="Inter"
+          color="#334155"
           zoom={viewport.zoom}
           viewportX={viewport.x}
           viewportY={viewport.y}

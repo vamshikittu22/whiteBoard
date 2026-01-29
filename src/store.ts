@@ -75,10 +75,19 @@ interface AppState {
 
 export const useStore = create<AppState>((set, get) => {
   // --- Load Initial State ---
-  const savedUser = storage.getItem('cc_user');
-  const savedToken = storage.getItem('cc_token');
+  let initialUser = null;
+  let savedToken = null;
 
-  const initialUser = savedUser ? JSON.parse(savedUser) : null;
+  try {
+    const savedUserStr = storage.getItem('cc_user');
+    savedToken = storage.getItem('cc_token');
+    initialUser = savedUserStr ? JSON.parse(savedUserStr) : null;
+  } catch (e) {
+    console.error('[Store] Failed to parse saved user:', e);
+    storage.removeItem('cc_user');
+    storage.removeItem('cc_token');
+  }
+
   if (savedToken) {
     api.setToken(savedToken);
     // Explicitly load boards if token exists
@@ -87,10 +96,26 @@ export const useStore = create<AppState>((set, get) => {
     }, 0);
   }
 
+  // --- API Event Listeners ---
+  if (typeof window !== 'undefined') {
+    window.addEventListener('api-unauthorized', () => {
+      console.warn('[Store] Unauthorized access, logging out...');
+      storage.removeItem('cc_user');
+      storage.removeItem('cc_token');
+      api.setToken(null);
+      set({
+        currentUser: null,
+        accessToken: null,
+        view: 'login',
+        currentBoardId: null,
+        items: {},
+        itemOrder: []
+      });
+    });
+  }
+
   // --- Transport Listener ---
   const handleMessage = (msg: any) => {
-    const state = get();
-
     if (msg.type === 'OP') {
       applyOpToState(set, msg.op);
     }
@@ -277,7 +302,6 @@ export const useStore = create<AppState>((set, get) => {
       }));
 
       if (broadcast && state.currentBoardId && transport) {
-        // saveBoardState(state.currentBoardId, get().items, get().itemOrder); // Server handles persistence now
         transport.send({
           type: 'OP',
           op,
@@ -405,12 +429,8 @@ export function getInverseOp(op: Op): Op {
     case 'update':
       return { type: 'update', id: op.id, data: op.prev, prev: op.data };
     case 'clear':
-      return { type: 'clear' }; // Destructive
+      return { type: 'clear' };
     default:
       throw new Error('Unknown op type');
   }
-}
-
-function saveBoardState(boardId: string, items: any, itemOrder: any) {
-  storage.setItem(`cc_board_${boardId}`, JSON.stringify({ items, itemOrder }));
 }

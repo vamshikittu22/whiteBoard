@@ -10,14 +10,18 @@ export class LocalStorageProvider implements StorageProvider {
     private useMemory: boolean = false;
 
     constructor() {
-        // Test if localStorage is available
+        // Test if localStorage is available and accessible
         try {
-            const testKey = '__storage_test__';
-            localStorage.setItem(testKey, testKey);
-            localStorage.removeItem(testKey);
-            this.useMemory = false;
+            if (typeof window !== 'undefined' && window.localStorage) {
+                const testKey = '__storage_test__';
+                window.localStorage.setItem(testKey, testKey);
+                window.localStorage.removeItem(testKey);
+                this.useMemory = false;
+            } else {
+                this.useMemory = true;
+            }
         } catch (e) {
-            console.warn('[Storage] localStorage not available, using in-memory fallback');
+            console.warn('[Storage] localStorage not available or restricted, using in-memory fallback');
             this.useMemory = true;
         }
     }
