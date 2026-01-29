@@ -24,6 +24,7 @@ export const KonvaBoard = () => {
   const [currentShapeId, setCurrentShapeId] = useState<string | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  const [pendingTextItem, setPendingTextItem] = useState<CanvasItem | null>(null);
 
   const handleUpdate = useCallback((id: string, data: Partial<CanvasItem>) => {
     const item = items[id];
@@ -175,6 +176,7 @@ export const KonvaBoard = () => {
       };
       dispatch({ type: 'create', item: newItem });
       setIsDrawing(false);
+      setPendingTextItem(newItem); // Store for immediate editor display
       setEditingTextId(id); // Open editor immediately
       return;
     }
@@ -286,23 +288,36 @@ export const KonvaBoard = () => {
       }
     }
     setEditingTextId(null);
+    setPendingTextItem(null);
     setTool('select');
   }, [editingTextId, handleUpdate, items, dispatch, setTool]);
 
   const handleTextCancel = useCallback(() => {
     if (editingTextId) {
-      const item = items[editingTextId];
+      const item = items[editingTextId] || pendingTextItem;
       // Delete empty text items (but not sticky notes - they have default text)
       if (item && item.type === 'text' && !item.text) {
         dispatch({ type: 'delete', id: editingTextId, item });
       }
     }
     setEditingTextId(null);
+    setPendingTextItem(null);
     setTool('select');
-  }, [editingTextId, items, dispatch, setTool]);
+  }, [editingTextId, items, pendingTextItem, dispatch, setTool]);
 
-  // Get editing text item for TextEditor
-  const editingTextItem = editingTextId ? items[editingTextId] : null;
+  // Get editing text item for TextEditor (use pending item as fallback for newly created items)
+  const editingTextItem = editingTextId ? (items[editingTextId] || pendingTextItem) : null;
+
+  // Debug logging
+  if (editingTextId) {
+    console.log('[TextEditor Debug]', {
+      editingTextId,
+      hasItemInStore: !!items[editingTextId],
+      hasPendingItem: !!pendingTextItem,
+      editingTextItem,
+      itemType: editingTextItem?.type
+    });
+  }
 
   // Type guard for text items
   const isTextItem = (item: CanvasItem | null): item is CanvasItem & { type: 'text'; text: string; fontSize: number; fontFamily: string; width?: number; fill?: string } => {
@@ -379,22 +394,29 @@ export const KonvaBoard = () => {
       </Stage>
 
       {/* Text Editor Overlay for Text Items */}
-      {editingTextItem && isTextItem(editingTextItem) && (
-        <TextEditor
-          x={editingTextItem.x}
-          y={editingTextItem.y}
-          width={editingTextItem.width || 200}
-          text={editingTextItem.text}
-          fontSize={editingTextItem.fontSize}
-          fontFamily={editingTextItem.fontFamily}
-          color={editingTextItem.fill || '#000000'}
-          zoom={viewport.zoom}
-          viewportX={viewport.x}
-          viewportY={viewport.y}
-          onSubmit={handleTextSubmit}
-          onCancel={handleTextCancel}
-        />
-      )}
+      {(() => {
+        const shouldShowTextEditor = editingTextItem && editingTextItem.type === 'text';
+        console.log('[TextEditor Render Check - Text]', { editingTextItem, shouldShowTextEditor, itemType: editingTextItem?.type });
+        if (!shouldShowTextEditor) return null;
+
+        const textItem = editingTextItem as any;
+        return (
+          <TextEditor
+            x={textItem.x}
+            y={textItem.y}
+            width={textItem.width || 200}
+            text={textItem.text}
+            fontSize={textItem.fontSize}
+            fontFamily={textItem.fontFamily}
+            color={textItem.fill || '#000000'}
+            zoom={viewport.zoom}
+            viewportX={viewport.x}
+            viewportY={viewport.y}
+            onSubmit={handleTextSubmit}
+            onCancel={handleTextCancel}
+          />
+        );
+      })()}
 
       {/* Text Editor Overlay for Sticky Notes */}
       {editingTextItem && isStickyItem(editingTextItem) && (

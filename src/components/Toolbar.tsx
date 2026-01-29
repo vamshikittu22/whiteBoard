@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store';
 import {
   MousePointer2, Hand, Square, Circle, PenTool,
   Type, StickyNote, Eraser, Undo2, Redo2, Minus,
-  Highlighter, Pen, Pencil, Download, Trash2
+  Highlighter, Pen, Pencil, Download, Trash2, GripVertical
 } from 'lucide-react';
 import { ToolType } from '../types';
 import { cn } from '../utils';
@@ -42,19 +42,82 @@ export const Toolbar = () => {
     triggerExport, dispatch
   } = useStore();
 
+  // Draggable state
+  const [position, setPosition] = useState({ x: 16, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+
   const handleClear = () => {
     if (window.confirm('Are you sure you want to clear the entire board? This cannot be undone.')) {
       dispatch({ type: 'clear' });
     }
   };
 
+  // Drag handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: position.x,
+      initialY: position.y,
+    };
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !dragRef.current) return;
+
+      const deltaX = e.clientX - dragRef.current.startX;
+      const deltaY = e.clientY - dragRef.current.startY;
+
+      setPosition({
+        x: dragRef.current.initialX + deltaX,
+        y: dragRef.current.initialY + deltaY,
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      dragRef.current = null;
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
   const showProperties = ['pen', 'rect', 'ellipse', 'text', 'select'].includes(activeTool);
   const isPen = activeTool === 'pen';
 
   return (
-    <div className="absolute left-4 top-1/2 -translate-y-1/2 flex gap-4 z-50 items-start">
+    <div
+      ref={toolbarRef}
+      className="fixed flex gap-4 z-50 items-start"
+      style={{
+        left: position.x,
+        top: `calc(50% + ${position.y}px)`,
+        transform: 'translateY(-50%)',
+      }}
+    >
 
       <div className="flex flex-col gap-4">
+        {/* Drag Handle */}
+        <div
+          className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-xl rounded-2xl p-2 cursor-grab active:cursor-grabbing flex items-center justify-center"
+          onMouseDown={handleMouseDown}
+        >
+          <GripVertical className="w-5 h-5 text-slate-400" />
+        </div>
+
         {/* Main Tools */}
         <div className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-xl rounded-2xl p-2 flex flex-col gap-2">
           {tools.map((item) => (

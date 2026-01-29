@@ -23,8 +23,22 @@ export const TextEditor: React.FC<TextEditorProps> = ({
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // Calculate screen position from world coordinates
-    const screenX = x * zoom + viewportX;
-    const screenY = y * zoom + viewportY;
+    let screenX = x * zoom + viewportX;
+    let screenY = y * zoom + viewportY;
+
+    // Debug position calculation
+    console.log('[TextEditor Position]', {
+        worldX: x, worldY: y,
+        zoom, viewportX, viewportY,
+        screenX, screenY,
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight
+    });
+
+    // Clamp to visible screen bounds
+    screenX = Math.max(10, Math.min(screenX, window.innerWidth - 200));
+    screenY = Math.max(10, Math.min(screenY, window.innerHeight - 100));
+
     const scaledFontSize = fontSize * zoom;
 
     useEffect(() => {
@@ -63,19 +77,20 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                 left: screenX,
                 top: screenY,
                 width: width ? width * zoom : 'auto',
-                minWidth: 100,
-                minHeight: scaledFontSize + 10,
-                fontSize: scaledFontSize,
+                minWidth: 150,
+                minHeight: Math.max(scaledFontSize + 20, 40),
+                fontSize: Math.max(scaledFontSize, 14),
                 fontFamily: fontFamily,
                 color: color,
-                border: '2px solid #3b82f6',
-                borderRadius: 4,
-                padding: 4,
-                background: 'rgba(255,255,255,0.95)',
+                border: '3px solid #3b82f6',
+                borderRadius: 6,
+                padding: 8,
+                background: 'white',
                 outline: 'none',
                 resize: 'both',
-                zIndex: 1000,
-                lineHeight: 1.2,
+                zIndex: 9999,
+                lineHeight: 1.4,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
             }}
             placeholder="Type here..."
         />
