@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 interface TextEditorProps {
     x: number;
@@ -21,6 +21,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({
 }) => {
     const [value, setValue] = useState(text);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     // Calculate screen position from world coordinates
     let screenX = x * zoom + viewportX;
@@ -55,55 +56,66 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         }
     };
 
-    // Prevent mouse events from bubbling to canvas
-    const stopPropagation = (e: React.MouseEvent) => {
-        e.stopPropagation();
-    };
-
-    const handleBlur = () => {
-        // Small delay to allow click events to process first
-        setTimeout(() => {
+    // Handle click on the overlay background (outside the textarea)
+    const handleOverlayClick = useCallback((e: React.MouseEvent) => {
+        // Only submit if clicking the overlay background, not the textarea itself
+        if (e.target === containerRef.current) {
             if (value.trim()) {
                 onSubmit(value);
             } else {
                 onCancel();
             }
-        }, 100);
+        }
+    }, [value, onSubmit, onCancel]);
+
+    // Prevent mouse events from bubbling to canvas when clicking the textarea
+    const stopPropagation = (e: React.MouseEvent) => {
+        e.stopPropagation();
     };
 
     return (
-        <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={handleBlur}
-            onMouseDown={stopPropagation}
-            onMouseMove={stopPropagation}
-            onMouseUp={stopPropagation}
-            onClick={stopPropagation}
-            autoFocus
+        <div
+            ref={containerRef}
+            onClick={handleOverlayClick}
             style={{
                 position: 'fixed',
-                left: screenX,
-                top: screenY,
-                width: Math.max(width * zoom, 150),
-                minWidth: 150,
-                minHeight: Math.max(scaledFontSize + 20, 40),
-                fontSize: Math.max(scaledFontSize, 14),
-                fontFamily: fontFamily,
-                color: color,
-                border: '3px solid #3b82f6',
-                borderRadius: 6,
-                padding: 8,
-                background: 'white',
-                outline: 'none',
-                resize: 'both',
-                zIndex: 10000,
-                lineHeight: 1.4,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                zIndex: 9999,
             }}
-            placeholder="Type here..."
-        />
+        >
+            <textarea
+                ref={textareaRef}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onClick={stopPropagation}
+                onMouseDown={stopPropagation}
+                autoFocus
+                style={{
+                    position: 'absolute',
+                    left: screenX,
+                    top: screenY,
+                    width: Math.max(width * zoom, 150),
+                    minWidth: 150,
+                    minHeight: Math.max(scaledFontSize + 20, 40),
+                    fontSize: Math.max(scaledFontSize, 14),
+                    fontFamily: fontFamily,
+                    color: color,
+                    border: '3px solid #3b82f6',
+                    borderRadius: 6,
+                    padding: 8,
+                    background: 'white',
+                    outline: 'none',
+                    resize: 'both',
+                    zIndex: 10000,
+                    lineHeight: 1.4,
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                }}
+                placeholder="Type here..."
+            />
+        </div>
     );
 };

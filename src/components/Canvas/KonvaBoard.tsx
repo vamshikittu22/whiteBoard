@@ -404,22 +404,20 @@ export const KonvaBoard = () => {
 
       {/* Text Editor Overlay for Text Items */}
       {editingTextItem && isTextItem(editingTextItem) && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10000, pointerEvents: 'none' }}>
-          <TextEditor
-            x={editingTextItem.x}
-            y={editingTextItem.y}
-            width={editingTextItem.width || 200}
-            text={editingTextItem.text}
-            fontSize={editingTextItem.fontSize}
-            fontFamily={editingTextItem.fontFamily}
-            color={editingTextItem.fill || '#000000'}
-            zoom={viewport.zoom}
-            viewportX={viewport.x}
-            viewportY={viewport.y}
-            onSubmit={handleTextSubmit}
-            onCancel={handleTextCancel}
-          />
-        </div>
+        <TextEditor
+          x={editingTextItem.x}
+          y={editingTextItem.y}
+          width={editingTextItem.width || 200}
+          text={editingTextItem.text}
+          fontSize={editingTextItem.fontSize}
+          fontFamily={editingTextItem.fontFamily}
+          color={editingTextItem.fill || '#000000'}
+          zoom={viewport.zoom}
+          viewportX={viewport.x}
+          viewportY={viewport.y}
+          onSubmit={handleTextSubmit}
+          onCancel={handleTextCancel}
+        />
       )}
 
       {/* Text Editor Overlay for Sticky Notes */}
