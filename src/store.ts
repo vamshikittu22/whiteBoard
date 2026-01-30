@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
-import { CanvasItem, ToolType, Viewport, UserState, Op } from './types';
+import { CanvasItem, ToolType, Viewport, UserState, Op, BoardMember } from './types';
 import { createTransport, TransportLayer } from './transport';
 import { storage } from './persistence';
 import { api } from './lib/api';
@@ -24,7 +24,9 @@ interface AppState {
   currentUser: UserState | null;
   accessToken: string | null;
   currentBoardId: string | null;
+  currentUserRole: 'OWNER' | 'EDITOR' | 'VIEWER' | 'PENDING' | null;
   boards: BoardMetadata[];
+  boardMembers: BoardMember[];
 
   // Board State
   items: Record<string, CanvasItem>;
@@ -72,6 +74,12 @@ interface AppState {
 
   // Presence
   updateCursor: (pos: { x: number, y: number } | null) => void;
+
+  // Member Management (Owner only)
+  loadBoardMembers: (boardId: string) => Promise<void>;
+  updateMemberRole: (boardId: string, userId: string, role: string) => Promise<void>;
+  approveMember: (boardId: string, userId: string, role?: string) => Promise<void>;
+  removeMember: (boardId: string, userId: string) => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => {
@@ -171,7 +179,9 @@ export const useStore = create<AppState>((set, get) => {
     currentUser: initialUser,
     accessToken: savedToken,
     currentBoardId: urlBoardId && initialUser ? urlBoardId : null,
+    currentUserRole: null,
     boards: [],
+    boardMembers: [],
 
     items: {},
     itemOrder: [],
@@ -275,6 +285,20 @@ export const useStore = create<AppState>((set, get) => {
         future: [],
         peers: {}
       });
+
+      // Fetch board details to get user's role
+      try {
+        const board = await api.get(`/api/boards/${id}`);
+        if (board && board.userRole) {
+          set({ currentUserRole: board.userRole as any });
+          // If user is owner, load all members
+          if (board.userRole === 'OWNER') {
+            get().loadBoardMembers(id);
+          }
+        }
+      } catch (error) {
+        console.error('[Store] Failed to fetch board details:', error);
+      }
     },
 
     openBoardFromUrl: async (id) => {
@@ -299,6 +323,20 @@ export const useStore = create<AppState>((set, get) => {
         future: [],
         peers: {}
       });
+
+      // Fetch board details to get user's role
+      try {
+        const board = await api.get(`/api/boards/${id}`);
+        if (board && board.userRole) {
+          set({ currentUserRole: board.userRole as any });
+          // If user is owner, load all members
+          if (board.userRole === 'OWNER') {
+            get().loadBoardMembers(id);
+          }
+        }
+      } catch (error) {
+        console.error('[Store] Failed to fetch board details:', error);
+      }
     },
 
     deleteBoard: async (id) => {
@@ -319,7 +357,12 @@ export const useStore = create<AppState>((set, get) => {
       if (typeof window !== 'undefined') {
         window.history.pushState({}, '', '/');
       }
-      set({ view: 'dashboard', currentBoardId: null });
+      set({ 
+        view: 'dashboard', 
+        currentBoardId: null,
+        currentUserRole: null,
+        boardMembers: []
+      });
     },
 
     // --- Editor Actions ---
@@ -443,7 +486,50 @@ export const useStore = create<AppState>((set, get) => {
       });
     },
 
-    triggerExport: () => set(s => ({ exportTrigger: s.exportTrigger + 1 }))
+    triggerExport: () => set(s => ({ exportTrigger: s.exportTrigger + 1 })),
+
+    // --- Member Management Actions ---
+    loadBoardMembers: async (boardId) => {
+      try {
+        const members = await api.get(`/api/boards/${boardId}/members`);
+        set({ boardMembers: members });
+      } catch (error) {
+        console.error('Failed to load board members:', error);
+      }
+    },
+
+    updateMemberRole: async (boardId, userId, role) => {
+      try {
+        await api.patch(`/api/boards/${boardId}/members/${userId}`, { role });
+        // Refresh members list
+        get().loadBoardMembers(boardId);
+      } catch (error) {
+        console.error('Failed to update member role:', error);
+        throw error;
+      }
+    },
+
+    approveMember: async (boardId, userId, role = 'VIEWER') => {
+      try {
+        await api.post(`/api/boards/${boardId}/approve/${userId}`, { role });
+        // Refresh members list
+        get().loadBoardMembers(boardId);
+      } catch (error) {
+        console.error('Failed to approve member:', error);
+        throw error;
+      }
+    },
+
+    removeMember: async (boardId, userId) => {
+      try {
+        await api.delete(`/api/boards/${boardId}/members/${userId}`);
+        // Refresh members list
+        get().loadBoardMembers(boardId);
+      } catch (error) {
+        console.error('Failed to remove member:', error);
+        throw error;
+      }
+    }
   };
 });
 

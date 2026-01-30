@@ -53,6 +53,13 @@ class ApiClient {
         });
     }
 
+    patch(path: string, body: any) {
+        return this.request(path, {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+        });
+    }
+
     delete(path: string) {
         return this.request(path, { method: 'DELETE' });
     }

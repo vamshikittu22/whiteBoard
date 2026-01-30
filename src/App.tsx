@@ -8,7 +8,7 @@ import { ChevronLeft, Users, Share2, Copy, Check, X } from 'lucide-react';
 import { UserState } from './types';
 
 export default function App() {
-   const { view, viewport, exitBoard, peers, currentUser, items, currentBoardId } = useStore();
+   const { view, viewport, exitBoard, peers, currentUser, items, currentBoardId, currentUserRole, boardMembers, loadBoardMembers, updateMemberRole, removeMember } = useStore();
 
    // Share modal state - MUST be before any conditional returns
    const [isShareModalOpen, setIsShareModalOpen] = useState(false);

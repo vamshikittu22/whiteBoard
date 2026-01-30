@@ -66,22 +66,34 @@ export function initializeSocketServer(httpServer: HttpServer) {
                 let membership = await prisma.boardMember.findUnique({
                     where: {
                         userId_boardId: { userId: socket.data.userId, boardId }
-                    }
+                    },
+                    include: { user: { select: { id: true, name: true, email: true } } }
                 });
 
-                // Auto-add user as VIEWER if not a member (enables sharing via URL)
+                // Auto-add user if not a member (enables sharing via URL)
                 if (!membership) {
-                    console.log(`[Socket] Auto-adding user ${socket.data.email} as viewer to board ${boardId}`);
+                    const defaultRole = board.requireApproval ? 'PENDING' : 'VIEWER';
+                    console.log(`[Socket] Auto-adding user ${socket.data.email} as ${defaultRole} to board ${boardId}`);
                     membership = await prisma.boardMember.create({
                         data: {
                             userId: socket.data.userId,
                             boardId: boardId,
-                            role: 'VIEWER'
-                        }
+                            role: defaultRole
+                        },
+                        include: { user: { select: { id: true, name: true, email: true } } }
                     });
+
+                    // Notify owner if approval is required
+                    if (board.requireApproval) {
+                        socket.to(`board:${boardId}`).emit('APPROVAL_REQUESTED', {
+                            userId: socket.data.userId,
+                            email: socket.data.email,
+                            name: membership.user.name
+                        });
+                    }
                 }
 
-                // Join room
+                // Join room (even for pending users, so they can receive approval notifications)
                 await socket.join(`board:${boardId}`);
 
                 const latestSnapshot = await prisma.boardSnapshot.findFirst({

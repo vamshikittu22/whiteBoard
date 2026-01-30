@@ -31,16 +31,17 @@ model Org {
 }
 
 model Board {
-  id        String          @id @default(uuid())
-  name      String
-  lastSeq   Int             @default(0)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  orgId     String?
-  org       Org?            @relation(fields: [orgId], references: [id])
-  members   BoardMember[]
-  ops       BoardOp[]
-  snapshots BoardSnapshot[]
+  id              String          @id @default(uuid())
+  name            String
+  lastSeq         Int             @default(0)
+  requireApproval Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  orgId           String?
+  org             Org?            @relation(fields: [orgId], references: [id])
+  members         BoardMember[]
+  ops             BoardOp[]
+  snapshots       BoardSnapshot[]
 
   @@index([orgId])
 }

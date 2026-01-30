@@ -39,8 +39,15 @@ export const Toolbar = () => {
   const {
     activeTool, setTool, undo, redo, past, future,
     defaultStyle, setStrokeColor, setStrokeWidth, setBrushPreset,
-    triggerExport, dispatch
+    triggerExport, dispatch, currentUserRole
   } = useStore();
+
+  // Check if user can edit (OWNER or EDITOR role)
+  const canEdit = currentUserRole === 'OWNER' || currentUserRole === 'EDITOR';
+  const isViewer = currentUserRole === 'VIEWER';
+
+  // Filter tools based on role
+  const visibleTools = canEdit ? tools : tools.filter(t => t.id === 'select' || t.id === 'hand');
 
   // Draggable state
   const [position, setPosition] = useState({ x: 16, y: 0 });
@@ -120,7 +127,7 @@ export const Toolbar = () => {
 
         {/* Main Tools */}
         <div className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-xl rounded-2xl p-2 flex flex-col gap-2">
-          {tools.map((item) => (
+          {visibleTools.map((item) => (
             <button
               key={item.id}
               onClick={() => setTool(item.id)}
@@ -140,6 +147,13 @@ export const Toolbar = () => {
             </button>
           ))}
         </div>
+
+        {/* View Only Badge for Viewers */}
+        {isViewer && (
+          <div className="bg-amber-100 border border-amber-300 rounded-xl p-2 text-center">
+            <span className="text-xs font-semibold text-amber-800">👁 View Only</span>
+          </div>
+        )}
 
         {/* History Controls */}
         <div className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-xl rounded-2xl p-2 flex flex-col gap-2">

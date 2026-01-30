@@ -110,3 +110,15 @@ export interface UserState {
   cursor: Point | null;
   lastActive: number;
 }
+
+export interface BoardMember {
+  id: string;
+  role: 'OWNER' | 'EDITOR' | 'VIEWER' | 'PENDING';
+  userId: string;
+  boardId: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
