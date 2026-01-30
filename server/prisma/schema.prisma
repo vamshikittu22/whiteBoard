@@ -47,12 +47,13 @@ model Board {
 }
 
 model BoardMember {
-  id      String @id @default(uuid())
-  role    String @default("VIEWER")
-  userId  String
-  boardId String
-  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(uuid())
+  role      String   @default("VIEWER")
+  userId    String
+  boardId   String
+  createdAt DateTime @default(now())
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, boardId])
   @@index([boardId])
@@ -66,6 +67,9 @@ model BoardOp {
   clientId  String
   opType    String
   opData    Json
+  userId    String?
+  userName  String?
+  userEmail String?
   createdAt DateTime @default(now())
   board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
 

@@ -122,3 +122,19 @@ export interface BoardMember {
     email: string;
   };
 }
+
+export interface Toast {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info';
+  duration?: number;
+}
+
+export interface ActivityEvent {
+  id: string;
+  type: 'OP' | 'MEMBER_JOINED' | 'MEMBER_ROLE_CHANGED' | 'MEMBER_REMOVED';
+  timestamp: number;
+  userId: string;
+  userName: string;
+  details: any;
+}

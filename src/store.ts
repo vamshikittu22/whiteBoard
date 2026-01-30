@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
-import { CanvasItem, ToolType, Viewport, UserState, Op, BoardMember } from './types';
+import { CanvasItem, ToolType, Viewport, UserState, Op, BoardMember, Toast, ActivityEvent } from './types';
 import { createTransport, TransportLayer } from './transport';
 import { storage } from './persistence';
 import { api } from './lib/api';
@@ -80,6 +80,19 @@ interface AppState {
   updateMemberRole: (boardId: string, userId: string, role: string) => Promise<void>;
   approveMember: (boardId: string, userId: string, role?: string) => Promise<void>;
   removeMember: (boardId: string, userId: string) => Promise<void>;
+
+  // Notifications
+  toasts: Toast[];
+  addToast: (message: string, type?: 'success' | 'error' | 'info', duration?: number) => void;
+  removeToast: (id: string) => void;
+
+  // Activity & History
+  activityEvents: ActivityEvent[];
+  loadActivity: (boardId: string, limit?: number) => Promise<void>;
+  requestEditAccess: (boardId: string) => Promise<void>;
+
+  // Board Settings
+  updateBoardSettings: (boardId: string, settings: { requireApproval?: boolean; name?: string }) => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => {
@@ -195,6 +208,12 @@ export const useStore = create<AppState>((set, get) => {
     isDragging: false,
     defaultStyle: { stroke: '#000000', fill: 'transparent', strokeWidth: 4, strokeOpacity: 1 },
     exportTrigger: 0,
+
+    // Notifications
+    toasts: [],
+
+    // Activity & History
+    activityEvents: [],
 
     // --- Navigation Actions ---
     login: async (emailOrName, name, password, isRegister = false) => {
@@ -527,6 +546,52 @@ export const useStore = create<AppState>((set, get) => {
         get().loadBoardMembers(boardId);
       } catch (error) {
         console.error('Failed to remove member:', error);
+        throw error;
+      }
+    },
+
+    // --- Notification Actions ---
+    addToast: (message, type = 'info', duration = 4000) => {
+      const id = Math.random().toString(36).substring(7);
+      set(state => ({
+        toasts: [...state.toasts, { id, message, type, duration }]
+      }));
+    },
+
+    removeToast: (id) => {
+      set(state => ({
+        toasts: state.toasts.filter(t => t.id !== id)
+      }));
+    },
+
+    // --- Activity & History Actions ---
+    loadActivity: async (boardId, limit = 50) => {
+      try {
+        const events = await api.get(`/api/boards/${boardId}/activity?limit=${limit}`);
+        set({ activityEvents: events });
+      } catch (error) {
+        console.error('Failed to load activity:', error);
+      }
+    },
+
+    requestEditAccess: async (boardId) => {
+      try {
+        await api.post(`/api/boards/${boardId}/request-access`, {});
+        get().addToast('Edit access requested. Waiting for owner approval...', 'info');
+      } catch (error) {
+        console.error('Failed to request edit access:', error);
+        get().addToast('Failed to request edit access', 'error');
+      }
+    },
+
+    // --- Board Settings Actions ---
+    updateBoardSettings: async (boardId, settings) => {
+      try {
+        await api.patch(`/api/boards/${boardId}/settings`, settings);
+        get().addToast('Board settings updated', 'success');
+      } catch (error) {
+        console.error('Failed to update board settings:', error);
+        get().addToast('Failed to update settings', 'error');
         throw error;
       }
     }
