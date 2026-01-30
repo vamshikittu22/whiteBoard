@@ -25,6 +25,10 @@ export const KonvaBoard = () => {
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [pendingTextItem, setPendingTextItem] = useState<CanvasItem | null>(null);
+  // Local state for drawing items to avoid flooding undo history
+  const [drawingItem, setDrawingItem] = useState<CanvasItem | null>(null);
+  // Toast notification state
+  const [showExportToast, setShowExportToast] = useState(false);
 
   const handleUpdate = useCallback((id: string, data: Partial<CanvasItem>) => {
     const item = items[id];
@@ -45,8 +49,10 @@ export const KonvaBoard = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !isSpacePressed) setIsSpacePressed(true);
+      // Skip ALL keyboard shortcuts when typing in text inputs
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.code === 'Space' && !isSpacePressed) setIsSpacePressed(true);
 
       const keyMap: Record<string, any> = {
         'v': 'select', 'h': 'hand', 'p': 'pen', 'r': 'rect',
@@ -122,11 +128,13 @@ export const KonvaBoard = () => {
     }
   };
 
-  const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
+  const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     const stage = e.target.getStage();
     if (!stage) return;
 
-    if (e.evt.button === 1 || isSpacePressed || activeTool === 'hand') return;
+    // Only check mouse button for mouse events (not touch)
+    const evt = e.evt as MouseEvent;
+    if (evt.button === 1 || isSpacePressed || activeTool === 'hand') return;
 
     const pos = screenToWorld(stage.getPointerPosition()!, viewport);
     const clickedOnStage = e.target === stage || e.target.attrs.id === 'bg-rect';
@@ -171,7 +179,7 @@ export const KonvaBoard = () => {
     } else if (activeTool === 'text') {
       newItem = {
         type: 'text', id, x: pos.x, y: pos.y,
-        text: '', fontSize: 24, fontFamily: 'Inter',
+        text: '', fontSize: 24, fontFamily: 'Inter', width: 200,
         ...style, fill: style.stroke
       };
       dispatch({ type: 'create', item: newItem });
@@ -182,16 +190,18 @@ export const KonvaBoard = () => {
     }
 
     if (newItem) {
-      dispatch({ type: 'create', item: newItem });
+      // Store in local state while drawing - don't dispatch yet to avoid flooding undo history
+      setDrawingItem(newItem);
     }
   };
 
-  const handleMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
+  const handleMouseMove = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     const stage = e.target.getStage();
     if (!stage) return;
 
-    // Safety check: if drawing but no mouse button pressed, stop drawing
-    if (isDrawing && e.evt.buttons === 0) {
+    // Safety check: if drawing but no mouse button pressed, stop drawing (mouse only)
+    const evt = e.evt as MouseEvent;
+    if (isDrawing && 'buttons' in evt && evt.buttons === 0) {
       setIsDrawing(false);
       setCurrentShapeId(null);
       return;
@@ -202,49 +212,42 @@ export const KonvaBoard = () => {
     // Throttle cursor updates slightly? No, keeping real-time for now
     updateCursor({ x: pos.x, y: pos.y });
 
-    if (!isDrawing || !currentShapeId) return;
+    if (!isDrawing || !drawingItem) return;
 
-    const startItem = items[currentShapeId];
-    if (!startItem) return;
-
-    if (startItem.type === 'rect') {
-      dispatch({
-        type: 'update',
-        id: currentShapeId,
-        data: { width: pos.x - startItem.x, height: pos.y - startItem.y },
-        prev: { width: startItem.width, height: startItem.height }
+    // Update local drawing item state - don't dispatch to avoid flooding undo history
+    if (drawingItem.type === 'rect') {
+      setDrawingItem({
+        ...drawingItem,
+        width: pos.x - drawingItem.x,
+        height: pos.y - drawingItem.y
       });
-    } else if (startItem.type === 'ellipse') {
-      dispatch({
-        type: 'update',
-        id: currentShapeId,
-        data: { radiusX: Math.abs(pos.x - startItem.x), radiusY: Math.abs(pos.y - startItem.y) },
-        prev: { radiusX: startItem.radiusX, radiusY: startItem.radiusY }
+    } else if (drawingItem.type === 'ellipse') {
+      setDrawingItem({
+        ...drawingItem,
+        radiusX: Math.abs(pos.x - drawingItem.x),
+        radiusY: Math.abs(pos.y - drawingItem.y)
       });
-    } else if (startItem.type === 'path') {
-      const newPoints = [...startItem.points, pos.x, pos.y];
-      dispatch({
-        type: 'update',
-        id: currentShapeId,
-        data: { points: newPoints },
-        prev: { points: startItem.points }
+    } else if (drawingItem.type === 'path') {
+      setDrawingItem({
+        ...drawingItem,
+        points: [...drawingItem.points, pos.x, pos.y]
       });
-    } else if (startItem.type === 'line') {
+    } else if (drawingItem.type === 'line') {
       // Update end point of line
-      const newPoints = [startItem.points[0], startItem.points[1], pos.x, pos.y];
-      dispatch({
-        type: 'update',
-        id: currentShapeId,
-        data: { points: newPoints },
-        prev: { points: startItem.points }
+      setDrawingItem({
+        ...drawingItem,
+        points: [drawingItem.points[0], drawingItem.points[1], pos.x, pos.y]
       });
     }
   };
 
   const handleMouseUp = () => {
-    if (isDrawing) {
+    if (isDrawing && drawingItem) {
+      // Dispatch the final shape to the store - this is the ONLY operation in history
+      dispatch({ type: 'create', item: drawingItem });
       setIsDrawing(false);
       setCurrentShapeId(null);
+      setDrawingItem(null);
       if (activeTool !== 'pen') setTool('select');
     }
   };
@@ -273,6 +276,9 @@ export const KonvaBoard = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      // Show toast notification
+      setShowExportToast(true);
+      setTimeout(() => setShowExportToast(false), 2000);
     }
   }, [exportTrigger, currentBoardId]);
 
@@ -324,7 +330,7 @@ export const KonvaBoard = () => {
   };
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', touchAction: 'none' }}>
       <Stage
         ref={stageRef}
         width={window.innerWidth}
@@ -333,12 +339,15 @@ export const KonvaBoard = () => {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onTouchStart={handleMouseDown}
+        onTouchMove={handleMouseMove}
+        onTouchEnd={handleMouseUp}
         x={viewport.x}
         y={viewport.y}
         scaleX={viewport.zoom}
         scaleY={viewport.zoom}
         draggable={activeTool === 'hand' || isSpacePressed}
-        style={{ cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : 'default' }}
+        style={{ cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : 'default', touchAction: 'none' }}
       >
         <Layer>
           <KonvaRect id="bg-rect" x={-10000} y={-10000} width={20000} height={20000} fill="#fcfdfe" listening={true} />
@@ -365,6 +374,17 @@ export const KonvaBoard = () => {
               />
             );
           })}
+
+          {/* Render the drawing item while dragging - not yet in store */}
+          {drawingItem && (
+            <CanvasObject
+              key={drawingItem.id}
+              item={drawingItem}
+              isSelected={false}
+              onSelect={() => {}}
+              onUpdate={() => {}}
+            />
+          )}
 
           {Object.values(peers).map((peer: UserState) => {
             if (!peer.cursor) return null;
@@ -416,6 +436,13 @@ export const KonvaBoard = () => {
           onSubmit={handleTextSubmit}
           onCancel={handleTextCancel}
         />
+      )}
+
+      {/* Export Toast Notification */}
+      {showExportToast && (
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <span className="text-sm font-medium">Board exported as PNG</span>
+        </div>
       )}
     </div>
   );

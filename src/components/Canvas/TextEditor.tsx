@@ -40,12 +40,20 @@ export const TextEditor: React.FC<TextEditorProps> = ({
     }, []);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
+        // Stop propagation to prevent canvas keyboard shortcuts from triggering
+        e.stopPropagation();
+
         if (e.key === 'Escape') {
             onCancel();
         } else if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             onSubmit(value);
         }
+    };
+
+    // Prevent mouse events from bubbling to canvas
+    const stopPropagation = (e: React.MouseEvent) => {
+        e.stopPropagation();
     };
 
     const handleBlur = () => {
@@ -63,6 +71,8 @@ export const TextEditor: React.FC<TextEditorProps> = ({
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
+            onMouseDown={stopPropagation}
+            onClick={stopPropagation}
             style={{
                 position: 'absolute',
                 left: screenX,

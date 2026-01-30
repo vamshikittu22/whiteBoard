@@ -4,16 +4,37 @@ import { Toolbar } from './components/Toolbar';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { useStore } from './store';
-import { ChevronLeft, Users, Share2 } from 'lucide-react';
+import { ChevronLeft, Users, Share2, Copy, Check, X } from 'lucide-react';
 import { UserState } from './types';
 
 export default function App() {
-   const { view, viewport, exitBoard, peers, currentUser, items } = useStore();
+   const { view, viewport, exitBoard, peers, currentUser, items, currentBoardId } = useStore();
 
    // Hydration check
    const [mounted, setMounted] = useState(false);
    useEffect(() => setMounted(true), []);
    if (!mounted) return null;
+
+   // Share modal state
+   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+   const [copied, setCopied] = useState(false);
+
+   const handleShare = () => {
+      setIsShareModalOpen(true);
+      setCopied(false);
+   };
+
+   const handleCopyLink = () => {
+      const url = `${window.location.origin}/board/${currentBoardId}`;
+      navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+   };
+
+   const closeModal = () => {
+      setIsShareModalOpen(false);
+      setCopied(false);
+   };
 
    if (view === 'login') return <Login />;
    if (view === 'dashboard') return <Dashboard />;
@@ -57,7 +78,10 @@ export default function App() {
                   )}
                </div>
 
-               <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg">
+               <button 
+                  onClick={handleShare}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg"
+               >
                   <Share2 className="w-4 h-4" />
                   Share
                </button>
@@ -69,16 +93,46 @@ export default function App() {
          {/* Main Canvas */}
          <KonvaBoard />
 
-         {/* Bottom Info */}
-         <div className="absolute bottom-6 right-6 flex flex-col gap-2 pointer-events-none z-40">
-            <div className="bg-white/90 backdrop-blur-sm border border-slate-200 px-4 py-2 rounded-xl text-xs font-mono text-slate-500 shadow-sm text-right">
-               {Object.keys(items).length} objects
-            </div>
-            <div className="bg-white/90 backdrop-blur-sm border border-slate-200 px-4 py-2 rounded-xl text-xs font-mono text-slate-500 shadow-sm text-right">
-               Zoom: {Math.round(viewport.zoom * 100)}%
-            </div>
-         </div>
+          {/* Bottom Info */}
+          <div className="absolute bottom-6 right-6 flex flex-col gap-2 pointer-events-none z-40">
+             <div className="bg-white/90 backdrop-blur-sm border border-slate-200 px-4 py-2 rounded-xl text-xs font-mono text-slate-500 shadow-sm text-right">
+                {Object.keys(items).length} objects
+             </div>
+             <div className="bg-white/90 backdrop-blur-sm border border-slate-200 px-4 py-2 rounded-xl text-xs font-mono text-slate-500 shadow-sm text-right">
+                Zoom: {Math.round(viewport.zoom * 100)}%
+             </div>
+          </div>
 
-      </div>
-   );
+          {/* Share Modal */}
+          {isShareModalOpen && (
+             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" onClick={closeModal}>
+                <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                   <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-xl font-semibold text-slate-800">Share Board</h2>
+                      <button onClick={closeModal} className="p-1 hover:bg-slate-100 rounded-lg transition-colors">
+                         <X className="w-5 h-5 text-slate-500" />
+                      </button>
+                   </div>
+                   <p className="text-slate-600 mb-4">Invite others to collaborate on this board by sharing the link below.</p>
+                   <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                      <input 
+                         type="text" 
+                         value={`${window.location.origin}/board/${currentBoardId}`}
+                         readOnly
+                         className="flex-1 bg-transparent text-sm text-slate-700 outline-none"
+                      />
+                      <button 
+                         onClick={handleCopyLink}
+                         className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
+                      >
+                         {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                         {copied ? 'Copied!' : 'Copy'}
+                      </button>
+                   </div>
+                </div>
+             </div>
+          )}
+
+       </div>
+    );
 }
