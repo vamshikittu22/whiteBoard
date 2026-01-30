@@ -10,14 +10,14 @@ import { UserState } from './types';
 export default function App() {
    const { view, viewport, exitBoard, peers, currentUser, items, currentBoardId } = useStore();
 
+   // Share modal state - MUST be before any conditional returns
+   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+   const [copied, setCopied] = useState(false);
+
    // Hydration check
    const [mounted, setMounted] = useState(false);
    useEffect(() => setMounted(true), []);
    if (!mounted) return null;
-
-   // Share modal state
-   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-   const [copied, setCopied] = useState(false);
 
    const handleShare = () => {
       setIsShareModalOpen(true);

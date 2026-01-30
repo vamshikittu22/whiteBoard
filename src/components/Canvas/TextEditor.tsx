@@ -33,10 +33,14 @@ export const TextEditor: React.FC<TextEditorProps> = ({
     const scaledFontSize = fontSize * zoom;
 
     useEffect(() => {
-        if (textareaRef.current) {
-            textareaRef.current.focus();
-            textareaRef.current.select();
-        }
+        // Focus and select after a short delay to ensure rendering is complete
+        const timer = setTimeout(() => {
+            if (textareaRef.current) {
+                textareaRef.current.focus();
+                textareaRef.current.select();
+            }
+        }, 50);
+        return () => clearTimeout(timer);
     }, []);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -57,11 +61,14 @@ export const TextEditor: React.FC<TextEditorProps> = ({
     };
 
     const handleBlur = () => {
-        if (value.trim()) {
-            onSubmit(value);
-        } else {
-            onCancel();
-        }
+        // Small delay to allow click events to process first
+        setTimeout(() => {
+            if (value.trim()) {
+                onSubmit(value);
+            } else {
+                onCancel();
+            }
+        }, 100);
     };
 
     return (
@@ -72,12 +79,15 @@ export const TextEditor: React.FC<TextEditorProps> = ({
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
             onMouseDown={stopPropagation}
+            onMouseMove={stopPropagation}
+            onMouseUp={stopPropagation}
             onClick={stopPropagation}
+            autoFocus
             style={{
-                position: 'absolute',
+                position: 'fixed',
                 left: screenX,
                 top: screenY,
-                width: width ? width * zoom : 'auto',
+                width: Math.max(width * zoom, 150),
                 minWidth: 150,
                 minHeight: Math.max(scaledFontSize + 20, 40),
                 fontSize: Math.max(scaledFontSize, 14),
@@ -89,7 +99,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                 background: 'white',
                 outline: 'none',
                 resize: 'both',
-                zIndex: 9999,
+                zIndex: 10000,
                 lineHeight: 1.4,
                 boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
             }}
