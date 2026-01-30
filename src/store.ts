@@ -50,6 +50,7 @@ interface AppState {
   loadBoards: () => Promise<void>;
   createBoard: (name: string) => Promise<void>;
   openBoard: (id: string) => void;
+  openBoardFromUrl: (id: string) => Promise<void>;
   deleteBoard: (id: string) => void;
   exitBoard: () => void;
 
@@ -96,6 +97,16 @@ export const useStore = create<AppState>((set, get) => {
     }, 0);
   }
 
+  // --- Parse URL for Board ID ---
+  let urlBoardId: string | null = null;
+  if (typeof window !== 'undefined') {
+    const pathMatch = window.location.pathname.match(/^\/board\/([^\/]+)$/);
+    if (pathMatch) {
+      urlBoardId = pathMatch[1];
+      console.log('[Store] Found board ID in URL:', urlBoardId);
+    }
+  }
+
   // --- API Event Listeners ---
   if (typeof window !== 'undefined') {
     window.addEventListener('api-unauthorized', () => {
@@ -134,11 +145,32 @@ export const useStore = create<AppState>((set, get) => {
     }
   };
 
+  // Determine initial view based on URL and auth state
+  const getInitialView = () => {
+    if (urlBoardId && initialUser) {
+      // Has board ID in URL and is authenticated - will auto-open board
+      return 'board';
+    }
+    if (urlBoardId && !initialUser) {
+      // Has board ID but not authenticated - show login first
+      return 'login';
+    }
+    return initialUser ? 'dashboard' : 'login';
+  };
+
+  // Auto-open board from URL after store initialization if authenticated
+  if (urlBoardId && initialUser) {
+    setTimeout(() => {
+      console.log('[Store] Auto-opening board from URL:', urlBoardId);
+      useStore.getState().openBoardFromUrl(urlBoardId);
+    }, 100);
+  }
+
   return {
-    view: initialUser ? 'dashboard' : 'login',
+    view: getInitialView(),
     currentUser: initialUser,
     accessToken: savedToken,
-    currentBoardId: null,
+    currentBoardId: urlBoardId && initialUser ? urlBoardId : null,
     boards: [],
 
     items: {},
@@ -183,8 +215,21 @@ export const useStore = create<AppState>((set, get) => {
         storage.setItem('cc_token', data.accessToken);
         api.setToken(data.accessToken);
 
-        set({ currentUser: user, accessToken: data.accessToken, view: 'dashboard' });
-        get().loadBoards();
+        // Check if there's a pending board ID from URL (user opened shared board while logged out)
+        const pendingBoardId = sessionStorage.getItem('pendingBoardId');
+        if (pendingBoardId) {
+          sessionStorage.removeItem('pendingBoardId');
+          console.log('[Store] Opening pending board after login:', pendingBoardId);
+          set({ currentUser: user, accessToken: data.accessToken });
+          get().loadBoards();
+          // Open the board after a short delay to ensure boards are loaded
+          setTimeout(() => {
+            get().openBoardFromUrl(pendingBoardId);
+          }, 100);
+        } else {
+          set({ currentUser: user, accessToken: data.accessToken, view: 'dashboard' });
+          get().loadBoards();
+        }
       } catch (error) {
         console.error('Login failed:', error);
         throw error;
@@ -216,11 +261,40 @@ export const useStore = create<AppState>((set, get) => {
       transport = createTransport('socketio', state.accessToken, CLIENT_ID);
       transport.connect(id, handleMessage);
 
+      // Update URL to reflect the board being opened
+      if (typeof window !== 'undefined') {
+        window.history.pushState({ boardId: id }, '', `/board/${id}`);
+      }
+
       set({
         view: 'board',
         currentBoardId: id,
         items: {}, // Will be populated by transport
         itemOrder: [], // Will be populated by transport
+        past: [],
+        future: [],
+        peers: {}
+      });
+    },
+
+    openBoardFromUrl: async (id) => {
+      const state = get();
+      if (!state.accessToken) {
+        // Store the board ID to open after login
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('pendingBoardId', id);
+        }
+        return;
+      }
+
+      transport = createTransport('socketio', state.accessToken, CLIENT_ID);
+      transport.connect(id, handleMessage);
+
+      set({
+        view: 'board',
+        currentBoardId: id,
+        items: {},
+        itemOrder: [],
         past: [],
         future: [],
         peers: {}
@@ -240,6 +314,10 @@ export const useStore = create<AppState>((set, get) => {
       if (transport) {
         transport.disconnect();
         transport = null;
+      }
+      // Clear the board URL when exiting
+      if (typeof window !== 'undefined') {
+        window.history.pushState({}, '', '/');
       }
       set({ view: 'dashboard', currentBoardId: null });
     },

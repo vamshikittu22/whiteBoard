@@ -56,25 +56,33 @@ export function initializeSocketServer(httpServer: HttpServer) {
             try {
                 const { boardId } = data;
 
+                // First check if board exists
+                const board = await prisma.board.findUnique({ where: { id: boardId } });
+                if (!board) {
+                    return callback({ error: 'Board not found' });
+                }
+
                 // Check membership
-                const membership = await prisma.boardMember.findUnique({
+                let membership = await prisma.boardMember.findUnique({
                     where: {
                         userId_boardId: { userId: socket.data.userId, boardId }
                     }
                 });
 
+                // Auto-add user as VIEWER if not a member (enables sharing via URL)
                 if (!membership) {
-                    return callback({ error: 'Board not found or access denied' });
+                    console.log(`[Socket] Auto-adding user ${socket.data.email} as viewer to board ${boardId}`);
+                    membership = await prisma.boardMember.create({
+                        data: {
+                            userId: socket.data.userId,
+                            boardId: boardId,
+                            role: 'VIEWER'
+                        }
+                    });
                 }
 
                 // Join room
                 await socket.join(`board:${boardId}`);
-
-                // Get latest snapshot or reconstruct from ops
-                const board = await prisma.board.findUnique({ where: { id: boardId } });
-                if (!board) {
-                    return callback({ error: 'Board not found' });
-                }
 
                 const latestSnapshot = await prisma.boardSnapshot.findFirst({
                     where: { boardId },

@@ -58,12 +58,18 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
     }
 });
 
-// Get Board by ID
+// Get Board by ID (with auto-add for shared board access)
 router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {
     try {
         const { id } = req.params;
 
-        const membership = await prisma.boardMember.findUnique({
+        // Check if board exists first
+        const board = await prisma.board.findUnique({ where: { id } });
+        if (!board) {
+            return res.status(404).json({ error: 'Board not found' });
+        }
+
+        let membership = await prisma.boardMember.findUnique({
             where: { userId_boardId: { userId: req.userId!, boardId: id } },
             include: {
                 board: {
@@ -76,8 +82,25 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {
             }
         });
 
+        // Auto-add user as VIEWER if not a member (enables sharing via URL)
         if (!membership) {
-            return res.status(404).json({ error: 'Board not found or access denied' });
+            console.log(`[Boards] Auto-adding user ${req.userId} as viewer to board ${id}`);
+            membership = await prisma.boardMember.create({
+                data: {
+                    userId: req.userId!,
+                    boardId: id,
+                    role: 'VIEWER'
+                },
+                include: {
+                    board: {
+                        include: {
+                            members: {
+                                include: { user: { select: { id: true, name: true, email: true } } }
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         res.json({ ...membership.board, userRole: membership.role });
